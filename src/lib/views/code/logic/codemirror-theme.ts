@@ -27,8 +27,20 @@ export const noirTheme = EditorView.theme(
 			backgroundColor: 'var(--bg-elev-2)',
 			color: 'var(--text)',
 		},
-		'&.cm-focused .cm-selectionBackground, ::selection': {
-			backgroundColor: 'var(--accent-fill)',
+		// CodeMirror's base theme paints selections with fixed colours (#233 / #222 in dark) through
+		// more specific selectors, so ours need !important to apply in every theme.
+		'& .cm-selectionLayer .cm-selectionBackground': {
+			background: 'var(--accent-soft) !important',
+		},
+		'&.cm-focused .cm-selectionLayer .cm-selectionBackground': {
+			background: 'var(--accent-fill) !important',
+		},
+		// CodeMirror hides the native selection's background but not its text colour, so the app-wide
+		// ::selection rule (text in --bg, i.e. white in light themes) would still recolour selected code.
+		// Use the colour that reads best on the selection tint instead; this also overrides syntax colours
+		// that can match the tint (blue keys on a blue selection).
+		'.cm-line::selection, .cm-line ::selection': {
+			color: 'var(--selection-text) !important',
 		},
 		'.cm-matchingBracket': {
 			backgroundColor: 'var(--accent-soft)',

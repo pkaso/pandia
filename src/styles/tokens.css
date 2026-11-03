@@ -28,6 +28,7 @@
 	--syntax-punct: #6a6a72;
 	--syntax-url: #9c6bff;
 	--syntax-key: var(--text);
+	--selection-text: var(--text);
 
 	--success: #7fb069;
 	--warning: #e0a53c;

@@ -20,8 +20,9 @@ body {
 		'ss01' 1,
 		'zero' 1,
 		'calt' 1;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
+	/* The platform default, as VS Code uses: on macOS 'antialiased' turns off stem darkening and text renders thin. */
+	-webkit-font-smoothing: auto;
+	-moz-osx-font-smoothing: auto;
 	text-rendering: optimizeLegibility;
 }
 

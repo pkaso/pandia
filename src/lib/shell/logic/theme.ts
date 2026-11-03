@@ -1,4 +1,4 @@
-import { contrastRatio, luminance, mixHex, withAlpha } from '$lib/util/color';
+import { contrastRatio, flatten, luminance, mixHex, withAlpha } from '$lib/util/color';
 
 export interface ThemeColors {
 	bg: string;
@@ -114,6 +114,7 @@ function setDerivedShades(r: HTMLElement, theme: Theme): void {
 	const c = theme.colors;
 	const onAccent = readableOn(c.accent, c.bg);
 	r.style.setProperty('--on-accent', onAccent);
+	r.style.setProperty('--selection-text', selectionText(c));
 	r.style.setProperty('--accent-hover', hoverShade(c.accent, onAccent));
 	r.style.setProperty('--danger-hover', hoverShade(c.danger, c.bg));
 	r.style.setProperty('--danger-soft', mixHex(c.bg, c.danger, SOFT_MIX));
@@ -128,6 +129,12 @@ function setDerivedShades(r: HTMLElement, theme: Theme): void {
 	const light = theme.colorScheme === 'light';
 	r.style.setProperty('--shadow-pop', `0 8px 24px rgba(0, 0, 0, ${light ? 0.12 : 0.35})`);
 	r.style.setProperty('--shadow-modal', `0 16px 48px rgba(0, 0, 0, ${light ? 0.18 : 0.5})`);
+}
+
+// Selected code text: of the theme's text and background colours, whichever reads best on the selection.
+function selectionText(c: ThemeColors): string {
+	const selection = flatten(c.accentFill, c.bg);
+	return contrastRatio(c.text, selection) >= contrastRatio(c.bg, selection) ? c.text : c.bg;
 }
 
 // The theme background stays the label colour wherever it reaches WCAG AA on the fill.

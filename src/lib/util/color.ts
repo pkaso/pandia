@@ -11,6 +11,14 @@ export function mixHex(a: string, b: string, t: number): string {
 	return '#' + [r, g, bl].map((n) => n.toString(16).padStart(2, '0')).join('');
 }
 
+/** Paints `fill` (#rrggbb or rgba(r, g, b, a)) over the opaque `base` and returns the result as hex. */
+export function flatten(fill: string, base: string): string {
+	const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(fill);
+	if (!m) return fill;
+	const hex = '#' + [m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, '0')).join('');
+	return mixHex(base, hex, m[4] === undefined ? 1 : Number(m[4]));
+}
+
 export function withAlpha(hex: string, alpha: number): string {
 	const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
 	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
