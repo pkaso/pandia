@@ -431,7 +431,6 @@
 		<TabBar
 			tabs={workspace.tabList}
 			activeTabId={workspace.activeId}
-			tabStatuses={workspace.statuses}
 			capWarning={workspace.capWarning}
 			maxTabs={MAX_TABS}
 			hasActiveDoc={!!workspace.activeContext}
@@ -441,6 +440,7 @@
 			onClose={(id) => void workspace.close(id)}
 			onNew={workspace.create}
 			onReorder={workspace.reorder}
+			onRename={workspace.rename}
 			onToggleCompare={toggleComparePicker}
 			onExport={() => commandRegistry.get('doc.export')?.run()}
 		/>

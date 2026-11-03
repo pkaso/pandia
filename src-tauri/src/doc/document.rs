@@ -441,6 +441,41 @@ impl Document {
         }
     }
 
+    /// Renames the document. A file-backed document's file is renamed in its folder, refusing to
+    /// replace another file; any other document just takes `name` as its display name.
+    pub fn rename(&mut self, name: &str) -> DocResult<()> {
+        let name = name.trim();
+        if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\']) {
+            return Err(DocError::Edit(format!("“{name}” isn't a valid file name")));
+        }
+        let Some(current) = self.file_path.clone() else {
+            self.source_path = Some(name.to_string());
+            return Ok(());
+        };
+        let from = FsPath::new(&current);
+        let to = from.with_file_name(name);
+        if to == from {
+            return Ok(());
+        }
+        // A case-only rename on a case-insensitive disk finds the file itself at the new name.
+        let same_file = |a: &FsPath, b: &FsPath| match (a.canonicalize(), b.canonicalize()) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        };
+        if to.exists() && !same_file(from, &to) {
+            return Err(DocError::file(
+                FileOp::Rename,
+                &to,
+                std::io::ErrorKind::AlreadyExists.into(),
+            ));
+        }
+        std::fs::rename(from, &to).map_err(|e| DocError::file(FileOp::Rename, from, e))?;
+        let to = to.to_string_lossy().into_owned();
+        self.file_path = Some(to.clone());
+        self.source_path = Some(to);
+        Ok(())
+    }
+
     pub fn save_copy(&mut self, target: &str) -> DocResult<()> {
         use std::io::Write;
         let text = self.serialize()?;
@@ -1387,6 +1422,71 @@ mod tests {
             d.save_copy(&reply.to_string_lossy()).is_err(),
             "a missing reply file is not recreated with default permissions"
         );
+    }
+
+    fn rename_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("pandia-rename-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn rename_moves_the_file_and_keeps_saving_there() {
+        let dir = rename_dir("move");
+        let old = dir.join("data.json");
+        std::fs::write(&old, r#"{"a": 1}"#).unwrap();
+        let mut d = Document::from_file(&old).unwrap();
+
+        d.rename("users.json").unwrap();
+        let new = dir.join("users.json");
+        assert!(!old.exists() && new.exists());
+        let s = d.summary();
+        assert!(s.file_backed);
+        assert_eq!(s.source_path.as_deref(), Some(&*new.to_string_lossy()));
+
+        d.apply(&Op::SetValue {
+            path: Path::root(),
+            value: serde_json::json!({ "a": 2 }),
+        })
+        .unwrap();
+        d.save(None).unwrap();
+        let written: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&new).unwrap()).unwrap();
+        assert_eq!(written, serde_json::json!({ "a": 2 }));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn rename_refuses_to_replace_another_file() {
+        let dir = rename_dir("clash");
+        let old = dir.join("a.json");
+        let other = dir.join("b.json");
+        std::fs::write(&old, "1").unwrap();
+        std::fs::write(&other, "2").unwrap();
+        let mut d = Document::from_file(&old).unwrap();
+
+        let err = d.rename("b.json").unwrap_err();
+        assert!(matches!(
+            crate::doc::types::WireError::from(err)
+                .io
+                .map(|io| io.problem),
+            Some(crate::doc::types::IoProblem::AlreadyExists)
+        ));
+        assert_eq!(std::fs::read_to_string(&other).unwrap(), "2");
+        assert!(old.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn rename_rejects_paths_and_names_unsaved_documents() {
+        let mut d = doc(r#"{"a": 1}"#);
+        assert!(matches!(d.rename("../x.json"), Err(DocError::Edit(_))));
+        assert!(matches!(d.rename("  "), Err(DocError::Edit(_))));
+        d.rename("draft.json").unwrap();
+        let s = d.summary();
+        assert!(!s.file_backed);
+        assert_eq!(s.source_path.as_deref(), Some("draft.json"));
     }
 
     #[test]

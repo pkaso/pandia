@@ -19,7 +19,7 @@ import type { TreeRowsController } from '$lib/views/tree/state/tree-rows.svelte'
 import type { FindController } from '$lib/find/state/find.svelte';
 import type { CompareController } from '$lib/views/compare/state/compare.svelte';
 import { behaviorPrefs } from '$lib/settings/state/behavior-prefs.svelte';
-import { addRecent } from '$lib/shell/state/recents-store.svelte';
+import { addRecent, removeRecent } from '$lib/shell/state/recents-store.svelte';
 import type { Handoff } from '$lib/shell/state/handoff';
 
 const MAX_NOTES = 6;
@@ -281,6 +281,25 @@ export class DocSessionController {
 			this.sourceName = picked;
 			await this.refreshSummary();
 			if (!opts.silent) this.deps.flash(`saved ${basename(res.path)}`);
+			return true;
+		} catch (e) {
+			this.deps.setError(describeError(e));
+			return false;
+		}
+	};
+
+	/** Renames the file on disk (or, for an unsaved document, the name it will be saved under). */
+	rename = async (name: string): Promise<boolean> => {
+		if (!this.handle) return false;
+		try {
+			const before = this.summary?.fileBacked ? this.sourceName : null;
+			this.summary = await ipc.docRename(this.handle, name);
+			this.sourceName = this.summary.sourcePath ?? '(inline)';
+			if (before && this.summary.fileBacked && before !== this.sourceName) {
+				// The old path no longer exists; keep the file in recents under its new one.
+				removeRecent(before);
+				addRecent(this.sourceName, undefined, this.summary.sourceSize);
+			}
 			return true;
 		} catch (e) {
 			this.deps.setError(describeError(e));

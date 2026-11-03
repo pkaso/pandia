@@ -778,6 +778,25 @@ pub async fn doc_save(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn doc_rename(
+    state: tauri::State<'_, Arc<DocStore>>,
+    handle: DocHandle,
+    name: String,
+) -> Result<Summary, WireError> {
+    let store = state.inner().clone();
+    run_blocking(move || {
+        let save_lock = store.read(handle, |doc| Ok(doc.save_lock()))?;
+        let _no_save_meanwhile = save_lock.lock();
+        store.write(handle, |doc| {
+            doc.rename(&name)?;
+            Ok(doc.summary())
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn cli_reply(
     store: tauri::State<'_, Arc<DocStore>>,
     app: tauri::State<'_, crate::AppState>,

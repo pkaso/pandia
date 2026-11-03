@@ -260,6 +260,7 @@
 			get context() {
 				return context;
 			},
+			rename: (name: string) => session.rename(name),
 		}),
 	);
 

@@ -1,19 +1,20 @@
 <script lang="ts">
-	import type { DocStatus } from '$lib/shell/logic/status';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { X, Plus } from '@lucide/svelte';
 	import { shortcutLabel } from '$lib/shell/logic/shortcuts';
+	import { basename } from '$lib/util/path';
 
 	interface Tab {
 		id: string;
 		label: string;
 		sourceName: string | null;
+		renamable: boolean;
+		unsaved: boolean;
 	}
 
 	let {
 		tabs,
 		activeTabId,
-		tabStatuses,
 		capWarning,
 		maxTabs,
 		hasActiveDoc,
@@ -23,12 +24,12 @@
 		onClose,
 		onNew,
 		onReorder,
+		onRename,
 		onToggleCompare,
 		onExport,
 	}: {
 		tabs: Tab[];
 		activeTabId: string;
-		tabStatuses: Record<string, DocStatus | null>;
 		capWarning: boolean;
 		maxTabs: number;
 		hasActiveDoc: boolean;
@@ -39,6 +40,8 @@
 		onClose: (id: string) => void;
 		onNew: () => void;
 		onReorder: (sourceId: string, targetId: string) => void;
+		/** Resolves false when the rename failed; the document pane shows why. */
+		onRename: (id: string, name: string) => Promise<boolean>;
 		onToggleCompare: () => void;
 		onExport: () => void;
 	} = $props();
@@ -49,8 +52,10 @@
 	const DRAG_THRESHOLD_PX = 4;
 
 	function onTabPointerDown(id: string, e: PointerEvent) {
-		if ((e.target as HTMLElement).closest('.tab-close')) return;
+		if ((e.target as HTMLElement).closest('.tab-close, .tab-rename')) return;
 		if (e.button !== 0) return;
+		// The pointer capture below retargets the click to the tab itself, so remember where the press began.
+		pressOnLabel = !!(e.target as HTMLElement).closest('.tab-label');
 		dragStart = { tabId: id, x: e.clientX, y: e.clientY, pointerId: e.pointerId };
 		(e.currentTarget as Element).setPointerCapture(e.pointerId);
 	}
@@ -78,7 +83,76 @@
 		dragStart = null;
 		draggingId = null;
 		dragOverId = null;
+		// A drag ends with a click on the tab; it shouldn't also open the rename field.
+		justDragged = sourceId !== null;
 		if (sourceId && targetId && sourceId !== targetId) onReorder(sourceId, targetId);
+	}
+
+	let justDragged = false;
+	let pressOnLabel = false;
+
+	// Renaming: a click on another tab switches to it; a click on the active tab's name (or F2) edits it.
+	function onTabClick(tab: Tab) {
+		const dragged = justDragged;
+		justDragged = false;
+		if (renamingId === tab.id || dragged) return;
+		if (tab.id !== activeTabId) onActivate(tab.id);
+		else if (pressOnLabel) startRename(tab);
+	}
+
+	let renamingId: string | null = $state(null);
+	let draft = $state('');
+	let renameBusy = $state(false);
+	let originalName = '';
+	const draftInvalid = $derived(
+		/[/\\]/.test(draft) || draft.trim() === '.' || draft.trim() === '..',
+	);
+
+	function currentName(tab: Tab): string {
+		return tab.sourceName && tab.sourceName !== '(inline)'
+			? basename(tab.sourceName)
+			: 'untitled.json';
+	}
+
+	function startRename(tab: Tab) {
+		if (!tab.renamable || renameBusy) return;
+		originalName = currentName(tab);
+		draft = originalName;
+		renamingId = tab.id;
+	}
+
+	function focusRenameField(input: HTMLInputElement) {
+		input.focus();
+		const dot = input.value.lastIndexOf('.');
+		input.setSelectionRange(0, dot > 0 ? dot : input.value.length);
+	}
+
+	async function commitRename() {
+		const id = renamingId;
+		const name = draft.trim();
+		if (!id || renameBusy) return;
+		if (!name || name === originalName || draftInvalid) {
+			renamingId = null;
+			return;
+		}
+		renameBusy = true;
+		try {
+			await onRename(id, name);
+		} finally {
+			renameBusy = false;
+			renamingId = null;
+		}
+	}
+
+	function onRenameKey(e: KeyboardEvent) {
+		e.stopPropagation(); // typing here mustn't activate the tab (Enter/Space) or reach other handlers
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			if (!draftInvalid) void commitRename();
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			renamingId = null;
+		}
 	}
 
 	function onTabPointerCancel() {
@@ -101,30 +175,58 @@
 				onpointermove={onTabPointerMove}
 				onpointerup={onTabPointerUp}
 				onpointercancel={onTabPointerCancel}
-				onclick={() => {
-					if (!draggingId) onActivate(tab.id);
-				}}
+				onclick={() => onTabClick(tab)}
 				onkeydown={(e) => {
 					if (e.key === 'Enter' || e.key === ' ') {
 						e.preventDefault();
 						onActivate(tab.id);
+					} else if (e.key === 'F2' && tab.id === activeTabId) {
+						e.preventDefault();
+						startRename(tab);
 					}
 				}}
 				role="tab"
 				tabindex="0"
 				aria-selected={tab.id === activeTabId}
-				title={tab.sourceName ?? tab.label}
+				title={tab.id === activeTabId && tab.renamable
+					? `${tab.sourceName ?? tab.label} · click the name again or press F2 to rename`
+					: (tab.sourceName ?? tab.label)}
 			>
-				<span class="tab-dot" class:dirty={tabStatuses[tab.id]?.dirty} aria-hidden="true"></span>
-				<span class="tab-label">{tab.label}</span>
+				{#if renamingId === tab.id}
+					<input
+						class="tab-rename"
+						class:invalid={draftInvalid}
+						bind:value={draft}
+						use:focusRenameField
+						size={Math.max(8, draft.length + 1)}
+						disabled={renameBusy}
+						spellcheck="false"
+						aria-label="Rename document"
+						aria-invalid={draftInvalid}
+						title={draftInvalid
+							? 'A name can’t contain / or \\'
+							: 'Enter to rename · Esc to cancel'}
+						onkeydown={onRenameKey}
+						onblur={() => void commitRename()}
+						onclick={(e) => e.stopPropagation()}
+					/>
+				{:else}
+					<span class="tab-label">{tab.label}</span>
+				{/if}
+				<!-- As in VS Code: an unsaved tab shows a dot where the close button is; hovering reveals the X. -->
 				<button
 					class="tab-close"
+					class:unsaved={tab.unsaved}
 					onclick={(e) => {
 						e.stopPropagation();
 						onClose(tab.id);
 					}}
 					title={`Close tab (${shortcutLabel('tab.close')})`}
-					aria-label="Close tab"><Icon icon={X} size="xs" /></button
+					aria-label={tab.unsaved ? 'Close tab (unsaved changes)' : 'Close tab'}
+					><span class="close-x"><Icon icon={X} size="xs" /></span><span
+						class="unsaved-dot"
+						aria-hidden="true"
+					></span></button
 				>
 			</div>
 		{/each}
@@ -237,20 +339,27 @@
 		box-shadow: inset 2px 0 0 0 var(--accent);
 	}
 
-	.tab-dot {
-		width: 6px;
-		height: 6px;
-		background: var(--text-faint);
-		flex-shrink: 0;
-	}
-	.tab-dot.dirty {
-		background: var(--accent);
-	}
-
 	.tab-label {
 		overflow: hidden;
 		text-overflow: ellipsis;
 		max-width: 160px;
+	}
+
+	.tab-rename {
+		font: inherit;
+		color: var(--text);
+		background: var(--bg);
+		border: var(--rule-width) solid var(--accent);
+		padding: 0 var(--space-xs);
+		margin: 0 calc(-1 * var(--space-xs));
+		max-width: 180px;
+		min-width: 0;
+		outline: none;
+		user-select: text;
+		-webkit-user-select: text;
+	}
+	.tab-rename.invalid {
+		border-color: var(--danger);
 	}
 
 	.tab-close {
@@ -264,6 +373,36 @@
 	}
 	.tab-close:hover {
 		color: var(--text);
+	}
+	/* Both glyphs share one slot so swapping them never shifts the tab's width. */
+	.tab-close {
+		display: inline-grid;
+		place-items: center;
+	}
+	.tab-close > * {
+		grid-area: 1 / 1;
+		display: inline-flex;
+	}
+	.unsaved-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: var(--text-dim);
+		visibility: hidden;
+	}
+	.tab-close.unsaved .unsaved-dot {
+		visibility: visible;
+	}
+	.tab-close.unsaved .close-x {
+		visibility: hidden;
+	}
+	.tab:hover .tab-close.unsaved .unsaved-dot,
+	.tab-close.unsaved:focus-visible .unsaved-dot {
+		visibility: hidden;
+	}
+	.tab:hover .tab-close.unsaved .close-x,
+	.tab-close.unsaved:focus-visible .close-x {
+		visibility: visible;
 	}
 
 	.tab-new {

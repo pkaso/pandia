@@ -25,6 +25,8 @@ export interface PaneView {
 	readonly sourceName: string | null;
 	readonly status: DocStatus | null;
 	readonly context: DocContext | null;
+	/** Renames the tab's document; resolves false when it couldn't (the pane shows why). */
+	rename?: (name: string) => Promise<boolean>;
 }
 
 export interface WorkspacePrompts {
@@ -90,6 +92,9 @@ export class Workspace {
 			id: t.id,
 			label: this.views[t.id]?.label ?? 'untitled',
 			sourceName: this.views[t.id]?.sourceName ?? null,
+			renamable: !!this.views[t.id]?.context && !!this.views[t.id]?.rename,
+			// As in VS Code, a document with no file on disk (pasted, fetched, piped) counts as unsaved.
+			unsaved: !!this.views[t.id]?.status?.dirty || this.views[t.id]?.context?.fileBacked === false,
 		})),
 	);
 
@@ -219,6 +224,9 @@ export class Workspace {
 	activate = (id: string) => {
 		this.activeId = id;
 	};
+
+	rename = (id: string, name: string): Promise<boolean> =>
+		this.views[id]?.rename?.(name) ?? Promise.resolve(false);
 
 	next = () => this.step(1);
 	prev = () => this.step(-1);

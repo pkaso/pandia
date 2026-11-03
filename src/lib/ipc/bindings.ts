@@ -43,6 +43,7 @@ export const commands = {
 	docGenerateTypes: (handle: DocHandle, lang: TypegenLang, typeName: string) => __TAURI_INVOKE<string>("doc_generate_types", { handle, lang, typeName }),
 	docHistory: (handle: DocHandle) => __TAURI_INVOKE<HistoryView>("doc_history", { handle }),
 	docSave: (handle: DocHandle, path: string | null) => __TAURI_INVOKE<SaveResult>("doc_save", { handle, path }),
+	docRename: (handle: DocHandle, name: string) => __TAURI_INVOKE<Summary>("doc_rename", { handle, name }),
 	docBackup: (handle: DocHandle, displayName: string | null) => __TAURI_INVOKE<boolean>("doc_backup", { handle, displayName }),
 	docBackupClear: (docId: string) => __TAURI_INVOKE<null>("doc_backup_clear", { docId }),
 	docBackupScan: () => __TAURI_INVOKE<BackupRecord[]>("doc_backup_scan"),
@@ -159,7 +160,7 @@ export type ExportPreview = {
 	truncated: boolean,
 };
 
-export type FileOp = "open" | "save" | "export";
+export type FileOp = "open" | "save" | "export" | "rename";
 
 export type FilterOp = "contains" | "notContains" | "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "isEmpty" | "isNotEmpty" | "in" | "notIn" | "startsWith";
 
@@ -196,7 +197,7 @@ export type IoInfo = {
 	file: string | null,
 };
 
-export type IoProblem = "missing" | "noPermission" | "isFolder" | "notText" | "diskFull" | "readOnly" | "other";
+export type IoProblem = "missing" | "noPermission" | "isFolder" | "notText" | "diskFull" | "readOnly" | "alreadyExists" | "other";
 
 export type LineDiffResult = {
 	hunks: LineHunk[],

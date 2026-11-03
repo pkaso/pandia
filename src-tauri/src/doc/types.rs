@@ -202,6 +202,7 @@ pub enum FileOp {
     Open,
     Save,
     Export,
+    Rename,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, specta::Type)]
@@ -213,6 +214,7 @@ pub enum IoProblem {
     NotText,
     DiskFull,
     ReadOnly,
+    AlreadyExists,
     Other,
 }
 
@@ -226,6 +228,7 @@ impl From<std::io::ErrorKind> for IoProblem {
             K::InvalidData => IoProblem::NotText,
             K::StorageFull => IoProblem::DiskFull,
             K::ReadOnlyFilesystem => IoProblem::ReadOnly,
+            K::AlreadyExists => IoProblem::AlreadyExists,
             _ => IoProblem::Other,
         }
     }

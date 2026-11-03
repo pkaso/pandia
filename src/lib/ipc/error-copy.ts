@@ -8,7 +8,12 @@ const FALLBACK = 'Something went wrong.';
 const INTERNAL =
 	'Something went wrong inside Pandia. Try again, and use Feedback to report it if it keeps happening.';
 
-const VERB: Record<FileOp, string> = { open: 'open', save: 'save', export: 'export to' };
+const VERB: Record<FileOp, string> = {
+	open: 'open',
+	save: 'save',
+	export: 'export to',
+	rename: 'rename',
+};
 
 function sentence(s: string): string {
 	return /[.!?]$/.test(s) ? s : `${s}.`;
@@ -111,6 +116,8 @@ function ioReason(problem: IoProblem, writing: boolean): string | null {
 			return 'the disk is full. Free up some space and try again.';
 		case 'readOnly':
 			return 'that location is read-only. Choose another location.';
+		case 'alreadyExists':
+			return 'a file with that name already exists in the folder.';
 		case 'other':
 			return null;
 	}

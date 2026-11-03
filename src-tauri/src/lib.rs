@@ -55,6 +55,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::doc_generate_types,
             commands::doc_history,
             commands::doc_save,
+            commands::doc_rename,
             commands::doc_backup,
             commands::doc_backup_clear,
             commands::doc_backup_scan,
