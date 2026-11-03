@@ -567,6 +567,7 @@
 			leftVersion={session.summary.version}
 			rightVersion={slot.versionOf(compare.handle) ?? compare.summary.version}
 			staleSource={compare.staleSource}
+			{isActive}
 			onExit={() => void compare.exit()}
 		/>
 	{:else if doc.viewMode === 'code'}

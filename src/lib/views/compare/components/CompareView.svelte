@@ -12,6 +12,13 @@
 	import { createSyncScrollPair } from '$lib/ui/sync-scroll';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { ArrowDownUp } from '@lucide/svelte';
+	import { resizable } from '$lib/ui/resizable';
+	import {
+		diffPanelPrefs,
+		DEFAULT_HEIGHT,
+		MIN_HEIGHT,
+		MAX_HEIGHT,
+	} from '../state/diff-panel-prefs.svelte';
 
 	interface Props {
 		leftHandle: DocHandle;
@@ -24,6 +31,9 @@
 		rightVersion: number;
 
 		staleSource?: boolean;
+
+		/** Whether this compare belongs to the visible tab; only then does it offer the diff panel toggle. */
+		isActive?: boolean;
 
 		onExit?: () => void;
 	}
@@ -38,6 +48,7 @@
 		leftVersion,
 		rightVersion,
 		staleSource = false,
+		isActive = true,
 		onExit,
 	}: Props = $props();
 
@@ -55,6 +66,30 @@
 		inlineHunkCount = meta.hunks;
 		inlineLineCounts = { adds: meta.addLines, dels: meta.delLines };
 		if (activeHunk >= meta.hunks) activeHunk = 0;
+	}
+
+	const panelPossible = $derived(isActive && !staleSource && (mode === 'split' || mode === 'tree'));
+	$effect(() => {
+		if (panelPossible) return diffPanelPrefs.offer();
+	});
+
+	// Leaves the diff panes at least this much room when the window is short.
+	const PANES_MIN = 120;
+	let rootH = $state(0);
+	let panelDragging = $state(false);
+	let panelStartH = 0;
+	let panelRenderedH = $state(0);
+	const panelMaxH = $derived(rootH > 0 ? Math.max(MIN_HEIGHT, rootH - PANES_MIN) : MAX_HEIGHT);
+	const panelH = $derived(Math.min(diffPanelPrefs.height, panelMaxH));
+
+	function onPanelResizeKey(e: KeyboardEvent) {
+		if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			diffPanelPrefs.setHeight(Math.min(panelRenderedH + 16, panelMaxH));
+		} else if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			diffPanelPrefs.setHeight(panelRenderedH - 16);
+		}
 	}
 
 	let syncScroll = $state(true);
@@ -254,7 +289,7 @@
 	>
 {/snippet}
 
-<div class="compare-root">
+<div class="compare-root" bind:clientHeight={rootH}>
 	<div class="navbar rule-b">
 		<div class="seg" role="group" aria-label="Diff layout">
 			<button
@@ -389,8 +424,41 @@
 			</div>
 		{/if}
 
-		{#if mode === 'split' || mode === 'tree'}
-			<div class="entries rule-t" bind:this={entriesEl}>
+		{#if (mode === 'split' || mode === 'tree') && diffPanelPrefs.visible}
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+			<div
+				class="panel-resize"
+				class:dragging={panelDragging}
+				role="separator"
+				aria-orientation="horizontal"
+				aria-label="resize diff panel"
+				aria-valuenow={panelRenderedH}
+				aria-valuemin={MIN_HEIGHT}
+				aria-valuemax={panelMaxH}
+				tabindex="0"
+				use:resizable={{
+					axis: 'y',
+					onStart: () => {
+						panelDragging = true;
+						panelStartH = panelRenderedH;
+					},
+					onMove: (dy) => diffPanelPrefs.setHeightLive(Math.min(panelStartH - dy, panelMaxH)),
+					onEnd: (moved) => {
+						panelDragging = false;
+						if (moved) diffPanelPrefs.commitHeight();
+					},
+				}}
+				ondblclick={() => diffPanelPrefs.setHeight(DEFAULT_HEIGHT)}
+				onkeydown={onPanelResizeKey}
+			></div>
+			<div
+				class="entries rule-t"
+				style="height: {panelH}px;"
+				bind:this={entriesEl}
+				bind:offsetHeight={panelRenderedH}
+				aria-label="diff panel"
+			>
 				{#if loading}
 					<div class="dim text-sm empty-line">Computing diff…</div>
 				{:else if error}
@@ -578,9 +646,41 @@
 
 	.entries {
 		flex: 0 0 auto;
-		max-height: 28vh;
 		overflow-y: auto;
 		background: var(--bg-elev);
+	}
+
+	.panel-resize {
+		flex: 0 0 auto;
+		height: 4px;
+		margin-top: -2px;
+		margin-bottom: -2px;
+		cursor: ns-resize;
+		background: transparent;
+		z-index: 5;
+		position: relative;
+		user-select: none;
+		touch-action: none;
+	}
+	.panel-resize::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 2px;
+		height: 1px;
+		background: transparent;
+		transition: background 80ms linear;
+	}
+	.panel-resize:hover::before {
+		background: var(--text-faint);
+	}
+	.panel-resize:focus-visible::before,
+	.panel-resize.dragging::before {
+		background: var(--accent);
+	}
+	.panel-resize:focus-visible {
+		outline: none;
 	}
 	.empty-line {
 		padding: var(--space-sm);

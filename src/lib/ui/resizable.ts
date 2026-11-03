@@ -5,11 +5,14 @@ interface ResizableOptions {
 	onEnd?: (moved: boolean) => void;
 
 	swallow?: boolean;
+
+	/** Which pointer axis drives the resize; `onMove` receives the delta along it. Defaults to 'x'. */
+	axis?: 'x' | 'y';
 }
 
 export function resizable(node: HTMLElement, options: ResizableOptions) {
 	let opts = options;
-	let startX = 0;
+	let start = 0;
 	let moved = false;
 	let active = false;
 
@@ -20,16 +23,16 @@ export function resizable(node: HTMLElement, options: ResizableOptions) {
 			e.stopPropagation();
 		}
 		active = true;
-		startX = e.clientX;
+		start = opts.axis === 'y' ? e.clientY : e.clientX;
 		moved = false;
 		node.setPointerCapture(e.pointerId);
 		opts.onStart?.();
 	}
 	function move(e: PointerEvent) {
 		if (!active) return;
-		const dx = e.clientX - startX;
-		if (Math.abs(dx) > 1) moved = true;
-		opts.onMove(dx);
+		const d = (opts.axis === 'y' ? e.clientY : e.clientX) - start;
+		if (Math.abs(d) > 1) moved = true;
+		opts.onMove(d);
 	}
 	function end(e: PointerEvent) {
 		if (!active) return;

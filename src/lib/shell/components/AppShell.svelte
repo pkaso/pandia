@@ -29,6 +29,7 @@
 	import TabBar from '$lib/shell/components/TabBar.svelte';
 	import { MAX_TABS, Workspace } from '$lib/shell/state/workspace.svelte';
 	import { sidebarPrefs } from '../state/sidebar-prefs.svelte';
+	import { diffPanelPrefs } from '$lib/views/compare/state/diff-panel-prefs.svelte';
 	import { ipc } from '$lib/ipc/client';
 	import type { BackupRecord, OpenSource, Path, PendingFile } from '$lib/ipc/bindings';
 	import { Handoff } from '$lib/shell/state/handoff';
@@ -129,6 +130,8 @@
 		openFile: cmdOpenFile,
 		openInTab: (source) => void workspace.open(source),
 		toggleSidebar: () => sidebarPrefs.toggleCollapsed(),
+		diffPanelAvailable: () => diffPanelPrefs.available,
+		toggleDiffPanel: () => diffPanelPrefs.toggleVisible(),
 		revealSchemaPanel: () => {
 			if (sidebarPrefs.collapsed) sidebarPrefs.toggleCollapsed();
 			sidebarPrefs.setActiveTab('schema');
@@ -319,6 +322,10 @@
 	$effect(() => {
 		const items = recentsStore.list.slice(0, 12).map((r) => ({ path: r.path, name: r.name }));
 		void ipc.refreshRecentFiles(items);
+	});
+
+	$effect(() => {
+		void ipc.setDiffPanelAvailable(diffPanelPrefs.available).catch(() => {});
 	});
 
 	$effect(() => {

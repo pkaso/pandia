@@ -74,7 +74,7 @@ describe('matchShortcut — Ctrl shortcuts off macOS', () => {
 		expect(matchShortcut(key('KeyS', { ctrlKey: false }))).toBeNull();
 		expect(matchShortcut(key('KeyS', { altKey: true }))).toBeNull();
 		expect(matchShortcut(key('KeyF', { altKey: true }))).toBeNull();
-		expect(matchShortcut(key('KeyJ'))).toBeNull();
+		expect(matchShortcut(key('KeyY'))).toBeNull();
 	});
 });
 

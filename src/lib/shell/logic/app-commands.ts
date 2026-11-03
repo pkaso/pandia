@@ -14,6 +14,8 @@ export interface ShellCommandDeps {
 	openFile: () => Promise<void> | void;
 	openInTab: (source: OpenSource) => void;
 	toggleSidebar: () => void;
+	diffPanelAvailable: () => boolean;
+	toggleDiffPanel: () => void;
 	revealSchemaPanel: () => void;
 	toggleComparePicker: () => void;
 	openSettings: (tab?: SettingsTab) => void;
@@ -89,6 +91,13 @@ export function buildShellCommands(deps: ShellCommandDeps): Command[] {
 			run: deps.toggleSidebar,
 		},
 		{
+			id: 'view.toggleDiffPanel',
+			label: 'Toggle Diff Panel',
+			category: 'View',
+			enabled: deps.diffPanelAvailable,
+			run: deps.toggleDiffPanel,
+		},
+		{
 			id: 'view.openSchemaPanel',
 			label: 'Open Schema Panel',
 			category: 'View',
@@ -108,14 +117,12 @@ export function buildShellCommands(deps: ShellCommandDeps): Command[] {
 			run: () => deps.openSettings(),
 		},
 
-		...SETTINGS_TABS.slice(1).map(
-			(tab): Command => ({
-				id: `nav.settings.${tab.id}`,
-				label: `Open Settings: ${tab.label}`,
-				category: 'Navigate',
-				run: () => deps.openSettings(tab.id),
-			}),
-		),
+		...SETTINGS_TABS.slice(1).map((tab): Command => ({
+			id: `nav.settings.${tab.id}`,
+			label: `Open Settings: ${tab.label}`,
+			category: 'Navigate',
+			run: () => deps.openSettings(tab.id),
+		})),
 		...(deps.isDev
 			? ([
 					{

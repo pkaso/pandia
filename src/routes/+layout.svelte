@@ -3,6 +3,7 @@
 	import { appearancePrefs } from '$lib/settings/state/appearance-prefs.svelte';
 	import { behaviorPrefs } from '$lib/settings/state/behavior-prefs.svelte';
 	import { sidebarPrefs } from '$lib/shell/state/sidebar-prefs.svelte';
+	import { diffPanelPrefs } from '$lib/views/compare/state/diff-panel-prefs.svelte';
 	import { recentsStore } from '$lib/shell/state/recents-store.svelte';
 	import { typegenPrefs } from '$lib/panels/state/typegen-prefs.svelte';
 	import { commandUsage } from '$lib/palette/state/command-store.svelte';
@@ -15,6 +16,7 @@
 		void appearancePrefs.init();
 		void behaviorPrefs.init();
 		void sidebarPrefs.init();
+		void diffPanelPrefs.init();
 		void recentsStore.init();
 		void typegenPrefs.init();
 		void commandUsage.init();

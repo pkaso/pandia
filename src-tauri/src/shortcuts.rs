@@ -72,6 +72,7 @@ pub const SHORTCUTS: &[Shortcut] = &[
     cmd("find.replace", "H").only(Platform::NotMac),
     cmd("palette.toggle", "K"),
     cmd("view.toggleSidebar", "B"),
+    cmd("view.toggleDiffPanel", "J"),
     cmd("view.tree", "1"),
     cmd("view.code", "2"),
     cmd("view.grid", "3"),

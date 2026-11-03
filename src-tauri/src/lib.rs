@@ -62,6 +62,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::doc_export_preview,
             commands::doc_export_to_file,
             refresh_recent_files,
+            set_diff_panel_available,
             drain_pending_files,
             cli_wait_done,
             commands::cli_reply,
@@ -82,6 +83,15 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
 pub(crate) struct AppState {
     pub pending_files: Mutex<Vec<PendingFile>>,
     pub handoffs: cli::Handoffs,
+    pub menu: Mutex<MenuContext>,
+}
+
+/// Inputs the native menu is rebuilt from whenever one of them changes.
+#[derive(Default, Clone)]
+pub(crate) struct MenuContext {
+    pub recents: Vec<RecentFile>,
+    /// The active tab is a compare in a layout that has the diff panel.
+    pub diff_panel: bool,
 }
 
 const SUPPORTED_EXTENSIONS: &[&str] = &["json", "jsonc", "json5", "geojson", "jsonl", "ndjson"];
@@ -180,6 +190,7 @@ pub fn run() {
         .manage(AppState {
             pending_files: Mutex::new(Vec::new()),
             handoffs: cli::Handoffs::default(),
+            menu: Mutex::new(MenuContext::default()),
         })
         .manage(std::sync::Arc::new(doc::store::DocStore::new()))
         .manage(std::sync::Arc::new(doc::jobs::JobRegistry::default()))
@@ -190,7 +201,7 @@ pub fn run() {
             let files = cli::pending_from(args, &cwd, &app.state::<AppState>().handoffs);
             queue_files(app.handle(), files);
 
-            let menu = build_menu(app.handle(), &[])?;
+            let menu = build_menu(app.handle(), &MenuContext::default())?;
             app.set_menu(menu)?;
 
             #[cfg(debug_assertions)]
@@ -235,10 +246,8 @@ fn item(app: &tauri::AppHandle, id: &str, label: &str) -> tauri::Result<MenuItem
     }
 }
 
-fn build_menu(
-    app: &tauri::AppHandle,
-    recents: &[RecentFile],
-) -> Result<Menu<tauri::Wry>, tauri::Error> {
+fn build_menu(app: &tauri::AppHandle, ctx: &MenuContext) -> Result<Menu<tauri::Wry>, tauri::Error> {
+    let recents = &ctx.recents;
     let about = item(app, "app.about", "About Pandia")?;
     let check_for_updates = item(app, "app.checkForUpdates", "Check for Updates...")?;
 
@@ -331,6 +340,7 @@ fn build_menu(
 
     let command_palette = item(app, "palette.toggle", "Command Palette...")?;
     let toggle_sidebar = item(app, "view.toggleSidebar", "Toggle Sidebar")?;
+    let toggle_diff_panel = item(app, "view.toggleDiffPanel", "Toggle Diff Panel")?;
     let toggle_tree_view = item(app, "view.tree", "Tree View")?;
     let toggle_code_view = item(app, "view.code", "Code View")?;
     let toggle_form_view = item(app, "view.grid", "Grid View")?;
@@ -351,7 +361,13 @@ fn build_menu(
     let view_menu = SubmenuBuilder::new(app, "View")
         .item(&command_palette)
         .separator()
-        .item(&toggle_sidebar)
+        .item(&toggle_sidebar);
+    let view_menu = if ctx.diff_panel {
+        view_menu.item(&toggle_diff_panel)
+    } else {
+        view_menu
+    };
+    let view_menu = view_menu
         .separator()
         .item(&toggle_tree_view)
         .item(&toggle_code_view)
@@ -452,16 +468,44 @@ fn cli_discard_piped(state: tauri::State<'_, AppState>, path: String) {
     state.handoffs.discard_piped(&path);
 }
 
-#[tauri::command]
-#[specta::specta]
-fn refresh_recent_files(app: AppHandle, items: Vec<RecentFile>) -> Result<(), String> {
+fn rebuild_menu(
+    app: AppHandle,
+    change: impl FnOnce(&mut MenuContext) -> bool,
+) -> Result<(), String> {
+    let ctx = {
+        let state = app.state::<AppState>();
+        let mut ctx = state.menu.lock().map_err(|e| e.to_string())?;
+        if !change(&mut ctx) {
+            return Ok(());
+        }
+        ctx.clone()
+    };
     let app2 = app.clone();
     app.run_on_main_thread(move || {
-        if let Ok(menu) = build_menu(&app2, &items) {
+        if let Ok(menu) = build_menu(&app2, &ctx) {
             let _ = app2.set_menu(menu);
         }
     })
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+#[specta::specta]
+fn refresh_recent_files(app: AppHandle, items: Vec<RecentFile>) -> Result<(), String> {
+    rebuild_menu(app, |ctx| {
+        ctx.recents = items;
+        true
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+fn set_diff_panel_available(app: AppHandle, available: bool) -> Result<(), String> {
+    rebuild_menu(app, |ctx| {
+        let changed = ctx.diff_panel != available;
+        ctx.diff_panel = available;
+        changed
+    })
 }
 
 fn handle_menu_event(app: &tauri::AppHandle, event: MenuEvent) {
