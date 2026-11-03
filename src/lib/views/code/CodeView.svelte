@@ -16,6 +16,11 @@
 
 		/** Puts the caret on the line of `path` (on its key) and scrolls it into the middle. */
 		revealPath: (path: Path) => Promise<void>;
+
+		/** Opens every fold. */
+		expandAll: () => void;
+		/** Folds each of the root's children, like the tree's Collapse all: the top-level keys stay. */
+		collapseAll: () => void;
 	}
 
 	/** The caret, VS Code style: 1-based line and column, and how many characters are selected. */
@@ -49,6 +54,9 @@
 		unfoldCode,
 		foldAll,
 		unfoldAll,
+		foldable,
+		foldEffect,
+		ensureSyntaxTree,
 	} from '@codemirror/language';
 	import {
 		defaultKeymap,
@@ -237,6 +245,29 @@
 	}
 
 	const api: CodeViewApi = {
+		expandAll: () => {
+			if (editorView) unfoldAll(editorView);
+		},
+		collapseAll: () => {
+			const view = editorView;
+			if (!view) return;
+			unfoldAll(view);
+			const { state } = view;
+			ensureSyntaxTree(state, state.doc.length, 500);
+			const effects = [];
+			// From line 2, so the root stays open; a folded child's own lines are skipped.
+			let coveredTo = -1;
+			for (let n = 2; n <= state.doc.lines; n++) {
+				const line = state.doc.line(n);
+				if (line.from < coveredTo) continue;
+				const range = foldable(state, line.from, line.to);
+				if (range) {
+					effects.push(foldEffect.of(range));
+					coveredTo = range.to;
+				}
+			}
+			if (effects.length > 0) view.dispatch({ effects });
+		},
 		revealPath: async (path) => {
 			const range = await offsetOf(path);
 			const view = editorView;

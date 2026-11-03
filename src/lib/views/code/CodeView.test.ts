@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import { EditorView } from '@codemirror/view';
+import { foldedRanges } from '@codemirror/language';
 import CodeView, { type CodeViewApi } from './CodeView.svelte';
 
 // jsdom has no layout, and CodeMirror measures text ranges after each change.
@@ -85,5 +86,36 @@ describe('CodeView — caret', () => {
 		await api.revealPath(['tags']);
 		expect(view.state.selection.main.head).toBe(TEXT.indexOf('"tags"'));
 		expect(cursors.at(-1)).toEqual({ line: 3, col: 3, selected: 0 });
+	});
+});
+
+describe('CodeView — Expand all / Collapse all', () => {
+	const TEXT = '{\n  "a": {\n    "b": [\n      1\n    ]\n  },\n  "c": [\n    2\n  ],\n  "d": 3\n}';
+
+	it("collapses each of the root's children, keeping their keys visible, and expands them back", async () => {
+		vi.mocked(ipc.docCanonicalText).mockResolvedValueOnce(TEXT as never);
+		let api: CodeViewApi | null = null;
+		const { container } = render(CodeView, {
+			props: {
+				handle: 'h3' as never,
+				sourceSize: 10,
+				editable: true,
+				onReady: (a: CodeViewApi | null) => (api = a),
+			},
+		});
+		await vi.waitFor(() => expect(api).not.toBeNull());
+		const view = EditorView.findFromDOM(container.querySelector('.cm-editor') as HTMLElement)!;
+		const folded = () => {
+			const out: string[] = [];
+			foldedRanges(view.state).between(0, view.state.doc.length, (from) => {
+				out.push(view.state.doc.lineAt(from).text.trim());
+			});
+			return out;
+		};
+
+		api!.collapseAll();
+		expect(folded()).toEqual(['"a": {', '"c": [']); // the root and "d" stay; "b" sits inside "a"
+		api!.expandAll();
+		expect(folded()).toEqual([]);
 	});
 });

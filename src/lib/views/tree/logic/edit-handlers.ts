@@ -1,6 +1,6 @@
 import type { ContentRow } from './model';
 
-const JSON_NUMBER = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
+export const JSON_NUMBER = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
 
 export type EditedKind = 'string' | 'number' | 'bool' | 'json';
 

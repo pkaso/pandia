@@ -8,6 +8,8 @@
 	import { chipText } from '$lib/views/tree/logic/row-format';
 	import TreeView from '$lib/views/tree/components/TreeView.svelte';
 	import Breadcrumb from '$lib/views/tree/components/Breadcrumb.svelte';
+	import ViewBar from '$lib/ui/ViewBar.svelte';
+	import ExpandCollapseButtons from '$lib/ui/ExpandCollapseButtons.svelte';
 	import CodeView, { type CodeCursor, type CodeViewApi } from '$lib/views/code/CodeView.svelte';
 	import NestedEditDialog from './NestedEditDialog.svelte';
 	import { nestedEditors } from '../state/nested-editors.svelte';
@@ -605,6 +607,16 @@
 			onExit={() => void compare.exit()}
 		/>
 	{:else if doc.viewMode === 'code'}
+		<ViewBar label="code">
+			{#snippet actions()}
+				<ExpandCollapseButtons
+					onExpandAll={() => codeApi?.expandAll()}
+					onCollapseAll={() => codeApi?.collapseAll()}
+					expandDisabled={!codeApi}
+					expandTitle="Open every fold"
+				/>
+			{/snippet}
+		</ViewBar>
 		<div class="code-pane">
 			<CodeView
 				handle={session.handle}

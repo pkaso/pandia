@@ -1,11 +1,17 @@
 import type { ContentRow, MenuAction } from './model';
 import type { NodeKind } from '$lib/ipc/bindings';
+import type { Component } from 'svelte';
+import { Braces, Brackets } from '@lucide/svelte';
+
+/** A drawn icon, used instead of the text glyph `ico` where one exists. */
+export type MenuIcon = Component<{ size?: number | string; strokeWidth?: number | string }>;
 
 export interface MenuLeaf {
 	type: 'action';
 	action: MenuAction;
 	label: string;
 	ico: string;
+	icon?: MenuIcon;
 	danger?: boolean;
 }
 export interface MenuSub {
@@ -25,10 +31,10 @@ export interface MenuCaps {
 const CONVERT: Array<{ action: MenuAction; label: string; kind: NodeKind }> = [
 	{ action: 'convert-string', label: 'String', kind: 'string' },
 	{ action: 'convert-number', label: 'Number', kind: 'number' },
-	{ action: 'convert-boolean', label: 'Boolean', kind: 'bool' },
-	{ action: 'convert-null', label: 'Null', kind: 'null' },
 	{ action: 'convert-array', label: 'Array', kind: 'array' },
 	{ action: 'convert-object', label: 'Object', kind: 'object' },
+	{ action: 'convert-boolean', label: 'Boolean', kind: 'bool' },
+	{ action: 'convert-null', label: 'Null', kind: 'null' },
 ];
 
 export function editActionFor(row: ContentRow, part: 'key' | 'value'): MenuAction | null {
@@ -51,7 +57,13 @@ export function buildMenuModel(row: ContentRow, caps: MenuCaps): MenuGroup[] {
 		edit.push({ type: 'action', action: 'edit-key', label: 'Edit key', ico: '✎' });
 	if (row.kind === 'array' || row.kind === 'object') {
 		const noun = row.kind === 'array' ? 'array' : 'object';
-		edit.push({ type: 'action', action: 'edit-nested', label: `Edit ${noun}…`, ico: '✎' });
+		edit.push({
+			type: 'action',
+			action: 'edit-nested',
+			label: `Edit ${noun}…`,
+			ico: '✎',
+			icon: row.kind === 'array' ? Brackets : Braces,
+		});
 		edit.push({
 			type: 'action',
 			action: 'add-child',

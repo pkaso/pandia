@@ -64,7 +64,9 @@
 							onclick={() => trigger(item.action)}
 							role="menuitem"
 						>
-							<span class="ico">{item.ico}</span><span class="lbl">{item.label}</span>
+							<span class="ico"
+								>{#if item.icon}<Icon icon={item.icon} size={16} />{:else}{item.ico}{/if}</span
+							><span class="lbl">{item.label}</span>
 						</button>
 					{:else}
 						<div
@@ -115,8 +117,11 @@
 
 	.menu-item .ico {
 		color: var(--text-dim);
-		width: 18px;
-		font-size: calc(var(--font-size-base) * 1.15);
+		width: 20px;
+		font-size: calc(var(--font-size-base) * 1.3);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		line-height: 1;
 		text-align: center;
 		flex-shrink: 0;

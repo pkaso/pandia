@@ -7,7 +7,7 @@ import { reorderDestination } from '$lib/util/reorder';
 import { pathToString } from '$lib/util/path';
 import type { PromptController } from '$lib/ui/prompt.svelte';
 import type { ApplyResult, DocHandle, Op, OpenSource, Path } from '$lib/ipc/bindings';
-import { compactJson, containerTextIn, escapeString, unescapeString } from './convert';
+import { containerTextIn, convertedText, escapeString, unescapeString } from './convert';
 
 const CHUNK = 200;
 const OBJECT_REORDER_MAX = 2000;
@@ -317,15 +317,12 @@ export function createNodeActions(deps: NodeActionDeps) {
 			});
 		}),
 
-		/** String: an array or object becomes its JSON text, unescaped; other values become "". */
-		convertToString: guard(async (row: ContentRow) => {
+		/** String, Number or Boolean, by JavaScript's rules (see `convertedText`). */
+		convertToScalar: guard(async (row: ContentRow, to: 'string' | 'number' | 'bool') => {
 			const handle = deps.handle();
 			if (!handle) return;
-			let s = '';
-			if (row.kind === 'object' || row.kind === 'array') {
-				s = compactJson(await ipc.docGetValue(handle, row.path));
-			}
-			await deps.apply({ kind: 'setValueText', path: row.path, text: JSON.stringify(s) });
+			const text = convertedText(row.kind, await ipc.docGetValue(handle, row.path), to);
+			await deps.apply({ kind: 'setValueText', path: row.path, text });
 		}),
 
 		escapeText: guard((row: ContentRow) => rewriteString(row, (s) => escapeString(s))),

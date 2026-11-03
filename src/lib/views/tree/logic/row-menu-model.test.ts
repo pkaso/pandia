@@ -40,6 +40,18 @@ describe('buildMenuModel', () => {
 		expect(a).not.toContain('convert-string'); // current kind is hidden
 	});
 
+	it('lists conversions as String, Number, Array, Object, Boolean, Null', () => {
+		const groups = buildMenuModel(row({ kind: 'null' }), caps);
+		const convert = groups.flat().find((i) => i.type === 'sub' && i.label === 'Convert to');
+		expect(convert?.type === 'sub' && convert.children.map((c) => c.label)).toEqual([
+			'String',
+			'Number',
+			'Array',
+			'Object',
+			'Boolean',
+		]);
+	});
+
 	it('converts to Array and Object, but not to the current kind', () => {
 		const str = actions(buildMenuModel(row({ kind: 'string' }), caps));
 		expect(str).toContain('convert-array');

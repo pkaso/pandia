@@ -1,6 +1,53 @@
 // Text transforms behind the tree's "Convert to", "Escape" and "Unescape" menu actions. They work on
 // JSON text rather than parsed values, so numbers keep the exact digits the document stores.
 
+import type { NodeKind } from '$lib/ipc/bindings';
+import { JSON_NUMBER } from './edit-handlers';
+
+/**
+ * The JSON text a value becomes under "Convert to" String, Number or Boolean, following JavaScript's
+ * String(), Number() and Boolean(): `"123"` → 123, `"asdf"` → 0, 0 → false, `{}` → true. Exceptions
+ * that keep data intact: an array/object becomes its compact JSON text, a number keeps its exact
+ * digits, and the string "false" becomes false.
+ *
+ * `text` is the value's JSON text as stored (pretty-printed for arrays and objects).
+ */
+export function convertedText(
+	from: NodeKind,
+	text: string,
+	to: 'string' | 'number' | 'bool',
+): string {
+	const t = text.trim();
+	const str = from === 'string' ? (JSON.parse(t) as string) : null;
+	if (to === 'string') {
+		if (from === 'object' || from === 'array') return JSON.stringify(compactJson(t));
+		return JSON.stringify(str ?? t); // 42 → "42", true → "true", null → "null"
+	}
+	if (to === 'number') {
+		if (from === 'number') return t;
+		if (from === 'bool') return t === 'true' ? '1' : '0';
+		if (str === null) return '0'; // null, arrays and objects
+		const s = str.trim();
+		if (JSON_NUMBER.test(s)) return s; // exact digits, even beyond what a JS number holds
+		const n = Number(s);
+		return Number.isFinite(n) ? String(n) : '0';
+	}
+	switch (from) {
+		case 'string': {
+			const s = str ?? '';
+			return String(s !== '' && s.trim().toLowerCase() !== 'false');
+		}
+		case 'number':
+			return String(Number(t) !== 0);
+		case 'bool':
+			return t;
+		case 'null':
+			return 'false';
+		default:
+			return 'true'; // arrays and objects, even empty ones
+	}
+}
+
 /** Drops the whitespace between JSON tokens (`{ "a": 1 }` → `{"a":1}`), leaving strings untouched. */
 export function compactJson(text: string): string {
 	let out = '';

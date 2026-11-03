@@ -126,7 +126,7 @@ describe('convert, escape and add', () => {
 
 	it('turns an array or object into its compact JSON text', async () => {
 		const { actions, ops, r } = on('object', '{\n  "a": [1.20, 3]\n}');
-		await actions.convertToString(r);
+		await actions.convertToScalar(r, 'string');
 		expect(ops).toEqual([
 			{ kind: 'setValueText', path: ['v'], text: JSON.stringify('{"a":[1.20,3]}') },
 		]);

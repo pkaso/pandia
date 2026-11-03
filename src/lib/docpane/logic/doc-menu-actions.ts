@@ -65,7 +65,7 @@ export function createDocMenuActions(deps: DocMenuDeps) {
 				await nodeActions.remove(row);
 				break;
 			case 'convert-string':
-				await nodeActions.convertToString(row);
+				await nodeActions.convertToScalar(row, 'string');
 				break;
 			case 'convert-array':
 				await nodeActions.convertToContainer(row, 'array');
@@ -86,10 +86,10 @@ export function createDocMenuActions(deps: DocMenuDeps) {
 				editNested(row);
 				break;
 			case 'convert-number':
-				await apply({ kind: 'setValueText', path: row.path, text: '0' });
+				await nodeActions.convertToScalar(row, 'number');
 				break;
 			case 'convert-boolean':
-				await apply({ kind: 'setValueText', path: row.path, text: 'false' });
+				await nodeActions.convertToScalar(row, 'bool');
 				break;
 			case 'convert-null':
 				await apply({ kind: 'setValueText', path: row.path, text: 'null' });
