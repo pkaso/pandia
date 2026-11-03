@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 	import { exit as exitApp } from '@tauri-apps/plugin-process';
+	import { titleBar } from '$lib/ui/title-bar';
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { open as openDialog, message } from '@tauri-apps/plugin-dialog';
 	import { open as openInBrowser } from '@tauri-apps/plugin-shell';
@@ -420,31 +421,12 @@
 		e.preventDefault();
 		commandRegistry.run(id);
 	}
-
-	function onTopBarPointerDown(e: PointerEvent) {
-		if (e.button !== 0) return;
-		const target = e.target as HTMLElement | null;
-		if (
-			target?.closest(
-				'button, input, select, a, [role="button"], [role="tab"], [data-tab-id], [data-no-drag]',
-			)
-		)
-			return;
-		const win = getCurrentWebviewWindow();
-		void win.startDragging().catch(() => {});
-	}
 </script>
 
 <svelte:window onkeydown={onWindowKeydown} />
 
 <div class="shell">
-	<header
-		class="shell-top"
-		role="toolbar"
-		aria-label="Window top bar"
-		tabindex="-1"
-		onpointerdown={onTopBarPointerDown}
-	>
+	<header class="shell-top" role="toolbar" aria-label="Window top bar" tabindex="-1" use:titleBar>
 		<TabBar
 			tabs={workspace.tabList}
 			activeTabId={workspace.activeId}

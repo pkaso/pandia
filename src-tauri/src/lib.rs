@@ -190,6 +190,9 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        // Remembers the window's size, position and maximized state on quit and restores them at
+        // launch (placing it back on screen if that monitor is gone).
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState {
             pending_files: Mutex::new(Vec::new()),

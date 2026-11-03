@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { titleBar } from '$lib/ui/title-bar';
 	import { getVersion } from '@tauri-apps/api/app';
 	import { open as openInBrowser } from '@tauri-apps/plugin-shell';
 	import AppearancePanel from '$lib/settings/AppearancePanel.svelte';
@@ -29,7 +30,7 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="settings">
-	<header class="top">
+	<header class="top" use:titleBar>
 		<span class="title">Settings</span>
 		<span class="grow"></span>
 		<button class="back" onclick={onClose} title="Back to canvas (esc)">← Back</button>
