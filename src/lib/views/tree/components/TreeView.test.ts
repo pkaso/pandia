@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { flushSync } from 'svelte';
-import { render } from '@testing-library/svelte';
+import { fireEvent, render } from '@testing-library/svelte';
 import { insertChildrenWithClose, rootRow, type ContentRow, type Row } from '../logic/model';
 import TreeView from './TreeView.svelte';
 
@@ -146,5 +146,84 @@ describe('TreeView search marks', () => {
 	it('leaves numbers and an empty query unmarked', () => {
 		expect(marksFor('4', null)).toEqual([]);
 		expect(marksFor('', null)).toEqual([]);
+	});
+});
+
+describe('TreeView clicks on a container key', () => {
+	function setup(editingKey = false) {
+		const rows: Row[] = [{ ...rootRow('object', 1), expanded: true }];
+		const user: ContentRow = {
+			variant: 'content',
+			path: ['user'],
+			depth: 1,
+			key: 'user',
+			kind: 'object',
+			preview: '{…}',
+			childCount: 2,
+			expanded: false,
+		};
+		insertChildrenWithClose(rows, 0, [user], 1);
+		const onToggle = vi.fn();
+		const onRowAction = vi.fn();
+		const { container } = render(TreeView, {
+			props: {
+				rows,
+				selectedIndex: -1,
+				onToggle,
+				onSelect: () => {},
+				onVisibleRange: () => {},
+				onRowMenu: () => {},
+				onRowAction,
+				scrollRequest: null,
+				editing: editingKey ? { path: ['user'], field: 'key' as const, buffer: 'user' } : null,
+				onEditInput: () => {},
+				onEditCommit: () => {},
+				onEditCancel: () => {},
+			},
+		});
+		flushSync();
+		const row = [...container.querySelectorAll<HTMLElement>('.r')].find(
+			(r) =>
+				r.querySelector('.k')?.textContent === 'user' ||
+				r.querySelector<HTMLInputElement>('[data-inline-editor]')?.value === 'user',
+		)!;
+		return { row, key: row.querySelector<HTMLElement>('.k')!, onToggle, onRowAction };
+	}
+
+	it('edits on a double-click without expanding or collapsing', async () => {
+		vi.useFakeTimers();
+		const { key, onToggle, onRowAction } = setup();
+		await fireEvent.click(key, { detail: 1 });
+		await fireEvent.click(key, { detail: 2 });
+		await fireEvent.dblClick(key);
+		vi.advanceTimersByTime(500);
+		expect(onToggle).not.toHaveBeenCalled();
+		expect(onRowAction).toHaveBeenCalledWith(expect.any(Number), 'edit-key');
+		vi.useRealTimers();
+	});
+
+	it('toggles after a single click on the key, and at once elsewhere on the row', async () => {
+		vi.useFakeTimers();
+		const { row, key, onToggle } = setup();
+		await fireEvent.click(key, { detail: 1 });
+		expect(onToggle).not.toHaveBeenCalled();
+		vi.advanceTimersByTime(300);
+		expect(onToggle).toHaveBeenCalledTimes(1);
+
+		await fireEvent.click(row.querySelector('.caret')!, { detail: 1 });
+		expect(onToggle).toHaveBeenCalledTimes(2);
+		vi.useRealTimers();
+	});
+
+	it('leaves the node alone when clicking inside an open editor', async () => {
+		vi.useFakeTimers();
+		const { row, onToggle } = setup(true);
+		const input = row.querySelector<HTMLInputElement>('[data-inline-editor]')!;
+		await fireEvent.click(input, { detail: 1 });
+		await fireEvent.click(input, { detail: 2 });
+		await fireEvent.dblClick(input);
+		vi.advanceTimersByTime(500);
+		expect(onToggle).not.toHaveBeenCalled();
+		vi.useRealTimers();
 	});
 });

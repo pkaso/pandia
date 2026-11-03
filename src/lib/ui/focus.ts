@@ -6,7 +6,8 @@ export function autofocusSelect(node: HTMLInputElement) {
 	return { destroy: () => clearTimeout(t) };
 }
 
-export function autogrowArea(node: HTMLTextAreaElement) {
+/** Grows a textarea with its text and focuses it: all text selected, or the caret at `caret`. */
+export function autogrowArea(node: HTMLTextAreaElement, opts: { caret?: number } = {}) {
 	const fit = () => {
 		node.style.height = 'auto';
 		node.style.height = `${node.scrollHeight}px`;
@@ -15,7 +16,8 @@ export function autogrowArea(node: HTMLTextAreaElement) {
 	node.addEventListener('input', fit);
 	const t = setTimeout(() => {
 		node.focus();
-		node.select();
+		if (opts.caret === undefined) node.select();
+		else node.setSelectionRange(opts.caret, opts.caret);
 		fit();
 	}, 0);
 	return {

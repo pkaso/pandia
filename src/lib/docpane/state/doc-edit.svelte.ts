@@ -3,6 +3,7 @@ import { decodeLossless } from '$lib/ipc/wire';
 import { describeError } from '$lib/ipc/error-copy';
 import type { ContentRow, Row } from '$lib/views/tree/logic/model';
 import type { ApplyResult, DocHandle, Op, Path } from '$lib/ipc/bindings';
+import { editedKind } from '$lib/views/tree/logic/edit-handlers';
 export interface EditState {
 	path: Path;
 	field: 'key' | 'value';
@@ -25,16 +26,11 @@ export function valueCommitOp(
 	path: Path,
 	preview: string,
 	buffer: string,
-): { op: Op } | { error: string } | null {
-	if (kind === 'string')
-		return { op: { kind: 'setValueText', path, text: JSON.stringify(buffer) } };
-	if (buffer === preview) return null;
-	try {
-		JSON.parse(buffer);
-	} catch (e) {
-		return { error: `invalid ${kind}: ${(e as Error).message}` };
-	}
-	return { op: { kind: 'setValueText', path, text: buffer } };
+): { op: Op } | null {
+	if (kind !== 'string' && buffer === preview) return null;
+	// Numbers and other JSON travel as typed (trimmed), so precision Rust keeps isn't lost on the way.
+	const text = editedKind(kind, buffer) === 'string' ? JSON.stringify(buffer) : buffer.trim();
+	return { op: { kind: 'setValueText', path, text } };
 }
 
 export class DocEditController {
@@ -111,12 +107,7 @@ export class DocEditController {
 
 		if (row.kind === 'object' || row.kind === 'array') return;
 		const result = valueCommitOp(row.kind, row.path, row.preview, buffer);
-		if (result === null) return;
-		if ('error' in result) {
-			this.deps.setError(result.error);
-			return;
-		}
-		await this.deps.apply(result.op);
+		if (result) await this.deps.apply(result.op);
 	};
 
 	cancel = () => {

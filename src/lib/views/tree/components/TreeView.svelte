@@ -255,11 +255,36 @@
 		);
 	}
 
-	function onRowClick(i: number, row: Row) {
+	// A double-click on an editable key edits it; its two clicks mustn't also open and close the node.
+	// So a click there waits out the double-click window before toggling; anywhere else toggles at once.
+	const DOUBLE_CLICK_MS = 250;
+	let pendingToggle: ReturnType<typeof setTimeout> | null = null;
+	function cancelPendingToggle() {
+		if (pendingToggle !== null) clearTimeout(pendingToggle);
+		pendingToggle = null;
+	}
+	$effect(() => cancelPendingToggle);
+
+	function onRowClick(i: number, row: Row, e?: MouseEvent) {
+		// Clicks inside an open editor (placing the caret, picking true/false) belong to the editor.
+		if (e && (e.target as Element).closest('[data-inline-editor]')) return;
 		onSelect(i);
-		if (row.variant === 'content' && isExpandable(row)) {
+		if (row.variant !== 'content' || !isExpandable(row)) return;
+		const onEditableKey =
+			editable && !!e && !!(e.target as Element).closest('.k') && !!editActionFor(row, 'key');
+		if (!onEditableKey) {
 			onToggle(i);
+			return;
 		}
+		cancelPendingToggle();
+		if (e.detail > 1) return; // the second click of a double-click
+		const key = pathKey(row.path);
+		pendingToggle = setTimeout(() => {
+			pendingToggle = null;
+			// Rows can shift meanwhile (a page loads); toggle the row that was clicked, wherever it is now.
+			const at = rows.findIndex((r) => r.variant === 'content' && pathKey(r.path) === key);
+			if (at >= 0) onToggle(at);
+		}, DOUBLE_CLICK_MS);
 	}
 
 	function onRowContext(e: MouseEvent, i: number, row: Row) {
@@ -280,6 +305,8 @@
 	const editable = $derived(!readOnly && !!onRowAction);
 
 	function onRowDblClick(e: MouseEvent, i: number, row: Row) {
+		cancelPendingToggle();
+		if ((e.target as Element).closest('[data-inline-editor]')) return; // selecting a word
 		if (!editable || row.variant !== 'content') return;
 		const part = (e.target as Element).closest('.k, .v:not(.url)');
 		if (!part) return;
@@ -427,7 +454,7 @@
 					style="transform: translate3d(0, {s.offsetAt(i) - s.shift}px, 0);"
 					role="button"
 					tabindex={0}
-					onclick={() => onRowClick(i, row)}
+					onclick={(e) => onRowClick(i, row, e)}
 					ondblclick={(e) => onRowDblClick(e, i, row)}
 					oncontextmenu={(e) => onRowContext(e, i, row)}
 					onkeydown={(e) => onRowKeydown(e, i, row)}
@@ -747,8 +774,13 @@
 		color: var(--syntax-punct);
 	}
 
+	/* Exactly one row line tall, borders included: a taller chip made its row taller than the rest,
+	   so rows below shifted whenever a node opened (chip → bracket) or closed. */
 	.chip {
 		display: inline-block;
+		box-sizing: border-box;
+		height: 18px;
+		line-height: 16px;
 		color: var(--text-dim);
 		background: var(--bg-elev-3);
 		border: 1px solid var(--rule-2);

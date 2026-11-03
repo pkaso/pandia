@@ -1,33 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createEditHandlers, editSize, nextNumberValue, valueTypeLabel } from './edit-handlers';
+import { createEditHandlers, editedKind, editWidth, nextNumberValue } from './edit-handlers';
 
-describe('editSize', () => {
-	it('returns at least 4 for tiny buffers', () => {
-		expect(editSize('')).toBe(4);
-		expect(editSize('a')).toBe(4); // 1+1 = 2 → clamp up to 4
-		expect(editSize('ab')).toBe(4); // 2+1 = 3 → clamp up to 4
-		expect(editSize('abc')).toBe(4); // 3+1 = 4
-	});
-
-	it('grows with content length up to 60', () => {
-		expect(editSize('abcd')).toBe(5);
-		expect(editSize('a'.repeat(50))).toBe(51);
-	});
-
-	it('caps at 60 chars', () => {
-		expect(editSize('a'.repeat(100))).toBe(60);
-		expect(editSize('a'.repeat(1000))).toBe(60);
+describe('editWidth', () => {
+	it('fits the text exactly, at least one character and at most 60', () => {
+		const w = (n: number) => `calc(${n} * (1ch + var(--text-tracking, 0em)) + 2 * var(--space-xs))`;
+		expect(editWidth('name')).toBe(w(4));
+		expect(editWidth('')).toBe(w(1));
+		expect(editWidth('a'.repeat(100))).toBe(w(60));
 	});
 });
 
-describe('valueTypeLabel', () => {
-	it('maps each kind to a 3-4 char label', () => {
-		expect(valueTypeLabel('string')).toBe('Str');
-		expect(valueTypeLabel('number')).toBe('Num');
-		expect(valueTypeLabel('bool')).toBe('Bool');
-		expect(valueTypeLabel('null')).toBe('Null');
-		expect(valueTypeLabel('object')).toBe('Val');
-		expect(valueTypeLabel('array')).toBe('Val');
+describe('editedKind', () => {
+	it('keeps a number or boolean only when the text is one, else a string', () => {
+		expect(editedKind('number', ' 1.5e3 ')).toBe('number');
+		expect(editedKind('number', '12px')).toBe('string');
+		expect(editedKind('bool', 'false')).toBe('bool');
+		expect(editedKind('bool', 'True')).toBe('string');
+	});
+	it('treats any value with a line break as a string', () => {
+		expect(editedKind('number', '4\n2')).toBe('string');
+		expect(editedKind('bool', 'true\n')).toBe('string');
+		expect(editedKind('null', 'null\n')).toBe('string');
+	});
+	it('lets a null take any JSON, else a string', () => {
+		expect(editedKind('null', '[1, 2]')).toBe('json');
+		expect(editedKind('null', 'n/a')).toBe('string');
 	});
 });
 
@@ -122,9 +119,23 @@ describe('createEditHandlers', () => {
 	});
 
 	describe('onAreaKeydown (textarea)', () => {
-		it('plain Enter does NOT commit (multi-line string)', () => {
+		it('Enter commits', () => {
 			const { handlers, callbacks } = setup();
 			handlers.onAreaKeydown(key('Enter'));
+			expect(callbacks.onCommit).toHaveBeenCalledOnce();
+		});
+
+		it('Shift+Enter adds a line instead of committing', () => {
+			const { handlers, callbacks } = setup();
+			const e = key('Enter', { shiftKey: true });
+			handlers.onAreaKeydown(e);
+			expect(callbacks.onCommit).not.toHaveBeenCalled();
+			expect(e.preventDefault).not.toHaveBeenCalled(); // the textarea inserts the newline
+		});
+
+		it('Enter that finishes an IME composition does not commit', () => {
+			const { handlers, callbacks } = setup();
+			handlers.onAreaKeydown(key('Enter', { isComposing: true }));
 			expect(callbacks.onCommit).not.toHaveBeenCalled();
 		});
 
@@ -143,28 +154,6 @@ describe('createEditHandlers', () => {
 		it('Escape cancels', () => {
 			const { handlers, callbacks } = setup();
 			handlers.onAreaKeydown(key('Escape'));
-			expect(callbacks.onCancel).toHaveBeenCalledOnce();
-		});
-	});
-
-	describe('onBoolKeydown', () => {
-		it('arrow keys flip the value (reading live buffer)', () => {
-			const { handlers, callbacks } = setup('true');
-			handlers.onBoolKeydown(key('ArrowRight'));
-			expect(callbacks.onInput).toHaveBeenCalledWith('false');
-		});
-
-		it('arrow keys flip back to true when buffer is false', () => {
-			const { handlers, callbacks } = setup('false');
-			handlers.onBoolKeydown(key('ArrowLeft'));
-			expect(callbacks.onInput).toHaveBeenCalledWith('true');
-		});
-
-		it('Enter commits, Escape cancels', () => {
-			const { handlers, callbacks } = setup('true');
-			handlers.onBoolKeydown(key('Enter'));
-			expect(callbacks.onCommit).toHaveBeenCalledOnce();
-			handlers.onBoolKeydown(key('Escape'));
 			expect(callbacks.onCancel).toHaveBeenCalledOnce();
 		});
 	});

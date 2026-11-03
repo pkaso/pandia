@@ -21,9 +21,24 @@ describe('valueCommitOp', () => {
 		expect(valueCommitOp('number', ['a'], '1e309', '1e309')).toBeNull();
 	});
 
-	it('rejects invalid syntax without producing an op', () => {
-		const r = valueCommitOp('number', ['a'], '1', 'not-json');
-		expect(r !== null && 'error' in r).toBe(true);
+	it('saves anything that is not a number, typed into a number, as a string', () => {
+		for (const typed of ['not-json', '12px', '+5', 'true', '']) {
+			expect(valueCommitOp('number', ['a'], '1', typed)).toEqual({
+				op: { kind: 'setValueText', path: ['a'], text: JSON.stringify(typed) },
+			});
+		}
+		expect(valueCommitOp('number', ['a'], '1', ' 42 ')).toEqual({
+			op: { kind: 'setValueText', path: ['a'], text: '42' },
+		});
+	});
+
+	it('saves anything but true/false, typed into a boolean, as a string', () => {
+		expect(valueCommitOp('bool', ['a'], 'true', 'yes')).toEqual({
+			op: { kind: 'setValueText', path: ['a'], text: '"yes"' },
+		});
+		expect(valueCommitOp('null', ['a'], 'null', 'n/a')).toEqual({
+			op: { kind: 'setValueText', path: ['a'], text: '"n/a"' },
+		});
 	});
 
 	it('bool and null edits also travel as text', () => {

@@ -29,6 +29,7 @@
 	--syntax-url: #9c6bff;
 	--syntax-key: var(--text);
 	--selection-text: var(--text);
+	--text-tracking: 0.005em; /* body letter-spacing; inline edit fields size themselves with it */
 	--find-match: rgba(224, 165, 60, 0.22);
 	--find-current: rgba(224, 165, 60, 0.45);
 

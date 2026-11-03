@@ -1,14 +1,13 @@
 <script lang="ts">
 	import type { ContentRow } from '../logic/model';
-	import { autofocusSelect, autogrowArea, autofocusEl } from '$lib/ui/focus';
+	import { autofocusSelect, autogrowArea } from '$lib/ui/focus';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { ChevronDown, ChevronUp } from '@lucide/svelte';
-	import { fmtKbd } from '$lib/util/platform';
 	import {
 		createEditHandlers,
-		editSize,
+		editedKind,
+		editWidth,
 		nextNumberValue,
-		valueTypeLabel,
 	} from '../logic/edit-handlers';
 
 	let {
@@ -27,46 +26,54 @@
 		onCancel: () => void;
 	} = $props();
 
-	const {
-		onAreaKeydown,
-		commitBool,
-		onBoolFocusOut,
-		onBoolKeydown,
-		onNumberKeydown,
-		onEditKeydown,
-	} = createEditHandlers({
-		onCommit: () => onCommit(),
-		onCancel: () => onCancel(),
-		onInput: (v) => onInput(v),
-		buffer: () => buffer,
-	});
-</script>
+	const { onAreaKeydown, commitBool, onBoolFocusOut, onNumberKeydown, onEditKeydown } =
+		createEditHandlers({
+			onCommit: () => onCommit(),
+			onCancel: () => onCancel(),
+			onInput: (v) => onInput(v),
+			buffer: () => buffer,
+		});
 
-{#snippet microBar(label: string, saveKey: string)}
-	<span class="micro-bar">
-		<span class="slot type">{label}</span>
-		<button
-			class="slot commit"
-			onmousedown={(e) => {
-				e.preventDefault();
-				onCommit();
-			}}>{saveKey} Save</button
-		>
-		<button
-			class="slot cancel"
-			onmousedown={(e) => {
-				e.preventDefault();
-				onCancel();
-			}}>Esc</button
-		>
-	</span>
-{/snippet}
+	// The text takes the colour of what it will be saved as: a number field turns string-coloured
+	// once its text stops being a number, and so on.
+	const savedAs = $derived(editedKind(kind, buffer));
+
+	// Shift+Enter in a number, bool or null field adds a line break, which makes the value a string:
+	// the field becomes the multi-line string editor, caret just after the break.
+	let textCaret: number | null = $state(null);
+	let switching = false; // the one-line field going away mustn't count as leaving the editor
+	function shiftEnterToText(e: KeyboardEvent): boolean {
+		if (e.key !== 'Enter' || !e.shiftKey || e.isComposing) return false;
+		e.preventDefault();
+		e.stopPropagation();
+		const el = e.currentTarget as HTMLInputElement;
+		const from = el.selectionStart ?? buffer.length;
+		const to = el.selectionEnd ?? from;
+		switching = true;
+		onInput(buffer.slice(0, from) + '\n' + buffer.slice(to));
+		textCaret = from + 1;
+		return true;
+	}
+	function onFieldBlur() {
+		if (!switching) onCommit();
+	}
+	const valueClass = $derived(
+		savedAs === 'string'
+			? 'string'
+			: savedAs === 'json'
+				? buffer.trim() === 'null'
+					? 'null'
+					: 'json'
+				: savedAs,
+	);
+</script>
 
 {#if field === 'key'}
 	<input
+		data-inline-editor
 		class="edit-input k-input"
 		value={buffer}
-		size={editSize(buffer)}
+		style:width={editWidth(buffer)}
 		use:autofocusSelect
 		oninput={(e) => onInput((e.currentTarget as HTMLInputElement).value)}
 		onkeydown={onEditKeydown}
@@ -74,45 +81,70 @@
 		spellcheck="false"
 		autocomplete="off"
 	/>
-	{@render microBar('Key', fmtKbd('⏎'))}
-{:else if kind === 'bool'}
-	<span
-		class="bool-seg"
-		use:autofocusEl
-		onkeydown={onBoolKeydown}
-		onfocusout={onBoolFocusOut}
-		role="radiogroup"
-		tabindex="0"
-		aria-label="boolean value"
-	>
-		<button
-			class="opt"
-			class:active={buffer === 'true'}
-			onmousedown={(e) => {
-				e.preventDefault();
-				commitBool('true');
-			}}>true</button
-		>
-		<button
-			class="opt"
-			class:active={buffer === 'false'}
-			onmousedown={(e) => {
-				e.preventDefault();
-				commitBool('false');
-			}}>false</button
-		>
-	</span>
-	<span class="edit-hint">←/→ toggle · {fmtKbd('⏎')} save</span>
-{:else if kind === 'number'}
-	<span class="num-edit">
-		<input
-			class="edit-input v-input number num-input"
+{:else if kind === 'string' || textCaret !== null}
+	<span class="str-edit" data-inline-editor>
+		<textarea
+			class="edit-area"
+			rows="1"
 			value={buffer}
-			size={editSize(buffer)}
+			use:autogrowArea={{ caret: textCaret ?? undefined }}
+			oninput={(e) => onInput((e.currentTarget as HTMLTextAreaElement).value)}
+			onkeydown={onAreaKeydown}
+			onblur={onCommit}
+			spellcheck="false"
+		></textarea>
+	</span>
+{:else if kind === 'bool'}
+	<!-- Typed like any value; anything other than true/false is saved as a string. -->
+	<span
+		class="bool-edit"
+		data-inline-editor
+		onfocusout={(e) => {
+			if (!switching) onBoolFocusOut(e);
+		}}
+	>
+		<input
+			class="edit-input v-input {valueClass}"
+			value={buffer}
+			style:width={editWidth(buffer)}
 			use:autofocusSelect
 			oninput={(e) => onInput((e.currentTarget as HTMLInputElement).value)}
-			onkeydown={onNumberKeydown}
-			onblur={onCommit}
+			onkeydown={(e) => shiftEnterToText(e) || onEditKeydown(e)}
+			spellcheck="false"
+			autocomplete="off"
+			aria-label="boolean value"
+		/>
+		<span class="bool-seg" role="group" aria-label="set to">
+			<button
+				class="opt"
+				class:active={buffer.trim() === 'true'}
+				tabindex="-1"
+				onmousedown={(e) => {
+					e.preventDefault();
+					commitBool('true');
+				}}>true</button
+			>
+			<button
+				class="opt"
+				class:active={buffer.trim() === 'false'}
+				tabindex="-1"
+				onmousedown={(e) => {
+					e.preventDefault();
+					commitBool('false');
+				}}>false</button
+			>
+		</span>
+	</span>
+{:else if kind === 'number'}
+	<span class="num-edit" data-inline-editor>
+		<input
+			class="edit-input v-input num-input {valueClass}"
+			value={buffer}
+			style:width={editWidth(buffer)}
+			use:autofocusSelect
+			oninput={(e) => onInput((e.currentTarget as HTMLInputElement).value)}
+			onkeydown={(e) => shiftEnterToText(e) || onNumberKeydown(e)}
+			onblur={onFieldBlur}
 			spellcheck="false"
 			autocomplete="off"
 		/>
@@ -133,51 +165,61 @@
 			>
 		</span>
 	</span>
-	<span class="edit-hint">↑/↓ step · {fmtKbd('⇧')} ×10</span>
-{:else if kind === 'string'}
-	<span class="str-edit">
-		<textarea
-			class="edit-area"
-			value={buffer}
-			use:autogrowArea
-			oninput={(e) => onInput((e.currentTarget as HTMLTextAreaElement).value)}
-			onkeydown={onAreaKeydown}
-			onblur={onCommit}
-			spellcheck="false"
-		></textarea>
-		{@render microBar('Str', fmtKbd('⌘⏎'))}
-	</span>
 {:else}
 	<input
-		class="edit-input v-input {kind}"
+		data-inline-editor
+		class="edit-input v-input {valueClass}"
 		value={buffer}
-		size={editSize(buffer)}
+		style:width={editWidth(buffer)}
 		use:autofocusSelect
 		oninput={(e) => onInput((e.currentTarget as HTMLInputElement).value)}
-		onkeydown={onEditKeydown}
-		onblur={onCommit}
+		onkeydown={(e) => shiftEnterToText(e) || onEditKeydown(e)}
+		onblur={onFieldBlur}
 		spellcheck="false"
 		autocomplete="off"
 	/>
-	{@render microBar(valueTypeLabel(kind), fmtKbd('⏎'))}
 {/if}
 
 <style>
+	/* Every editor is exactly one row line (18px) tall and its text starts where the plain text was:
+	   the side padding is pulled back by an equal negative margin. Nothing about the row moves when
+	   editing starts; the edit background and caret show the field. */
+	.edit-input,
+	.edit-area,
+	.bool-seg,
+	.num-edit {
+		box-sizing: border-box;
+		height: 18px;
+		background: var(--bg-edit);
+		flex-shrink: 0;
+	}
+	.edit-input,
+	.edit-area {
+		margin: 0 calc(-1 * var(--space-xs));
+	}
+	.num-edit,
+	.str-edit {
+		margin: 0 calc(-1 * var(--space-xs));
+	}
+	.num-edit .num-input,
+	.str-edit .edit-area {
+		margin: 0;
+	}
+
 	.edit-input {
 		font: inherit;
 		font-size: var(--font-size-base);
-		background: var(--bg-edit);
+		line-height: 18px;
+		letter-spacing: inherit; /* form fields don't inherit it; the text must match the plain text */
 		color: var(--text);
 		border: none;
-		border-bottom: 1px solid var(--accent);
 		padding: 0 var(--space-xs);
 		outline: none;
-		flex-shrink: 0;
 		width: auto;
 		caret-color: var(--accent);
 	}
 	.edit-input.k-input {
-		color: var(--text);
+		color: var(--syntax-key);
 	}
 	.edit-input.v-input.string {
 		color: var(--syntax-string);
@@ -192,91 +234,43 @@
 		color: var(--syntax-null);
 		font-style: italic;
 	}
+	.edit-input.v-input.json {
+		color: var(--text);
+	}
 
+	/* A string grows only when its text wraps or has line breaks. */
 	.str-edit {
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: var(--space-xs);
 	}
 	.edit-area {
 		width: 100%;
-		box-sizing: border-box;
+		min-height: 18px;
 		resize: none;
 		overflow: hidden;
 		font: inherit;
 		font-size: var(--font-size-base);
 		line-height: 18px;
-		background: var(--bg-edit);
+		letter-spacing: inherit;
 		color: var(--syntax-string);
 		border: none;
-		border-bottom: 1px solid var(--accent);
-		padding: 1px var(--space-xs);
+		padding: 0 var(--space-xs);
 		outline: none;
 		caret-color: var(--accent);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 	}
-	.str-edit .micro-bar {
-		margin-left: 0;
-	}
 
-	.micro-bar {
+	.bool-edit {
 		display: inline-flex;
 		align-items: stretch;
-		height: 18px;
-		background: var(--bg-elev-2);
-		border: 1px solid var(--rule-2);
-		margin-left: var(--space-xs);
+		gap: var(--space-xs);
 		flex-shrink: 0;
 	}
-	.micro-bar .slot {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		padding: 0 var(--space-sm);
-		border: none;
-		border-right: 1px solid var(--rule-2);
-		background: transparent;
-		color: var(--text-dim);
-		font: inherit;
-		font-size: var(--font-size-xs);
-		letter-spacing: var(--label-tracking);
-		text-transform: uppercase;
-		cursor: pointer;
-		white-space: nowrap;
-	}
-	.micro-bar .slot:last-child {
-		border-right: none;
-	}
-	.micro-bar .type {
-		cursor: default;
-	}
-	.micro-bar .commit {
-		color: var(--accent);
-	}
-	.micro-bar .commit:hover {
-		background: var(--accent);
-		color: var(--on-accent);
-	}
-	.micro-bar .cancel {
-		color: var(--text-dim);
-	}
-	.micro-bar .cancel:hover {
-		color: var(--text);
-		background: var(--bg-elev-3);
-	}
-
 	.bool-seg {
 		display: inline-flex;
 		align-items: stretch;
-		height: 18px;
-		background: var(--bg-edit);
-		border-bottom: 1px solid var(--accent);
-		flex-shrink: 0;
-		outline: none;
 	}
 	.bool-seg .opt {
 		display: inline-flex;
@@ -289,6 +283,7 @@
 		color: var(--text-dim);
 		font: inherit;
 		font-size: var(--font-size-base);
+		line-height: 18px;
 		cursor: pointer;
 	}
 	.bool-seg .opt:last-child {
@@ -301,39 +296,38 @@
 		background: var(--accent-fill);
 		color: var(--syntax-boolean);
 	}
-	.bool-seg:focus-visible {
-		box-shadow: 0 0 0 1px var(--accent-line);
-	}
 
 	.num-edit {
 		display: inline-flex;
 		align-items: stretch;
-		background: var(--bg-edit);
-		border-bottom: 1px solid var(--accent);
-		flex-shrink: 0;
 	}
 	.num-edit .num-input {
-		border-bottom: none;
+		height: 100%;
 		background: transparent;
 	}
 	.num-edit .step {
 		display: inline-flex;
 		flex-direction: column;
 		border-left: 1px solid var(--rule-2);
-		width: 16px;
+		width: 14px;
 	}
 	.num-edit .step .arrow {
-		flex: 1;
+		flex: 1 1 0;
+		min-height: 0;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		overflow: hidden;
 		background: transparent;
 		border: none;
 		color: var(--text-dim);
-		font-size: var(--font-size-xs);
 		line-height: 1;
 		cursor: pointer;
 		padding: 0;
+	}
+	.num-edit .step .arrow :global(svg) {
+		width: 9px;
+		height: 9px;
 	}
 	.num-edit .step .arrow:hover {
 		color: var(--text);
@@ -341,14 +335,5 @@
 	}
 	.num-edit .step .arrow + .arrow {
 		border-top: 1px solid var(--rule-2);
-	}
-
-	.edit-hint {
-		color: var(--text-dim);
-		font-size: var(--font-size-xs);
-		letter-spacing: var(--label-tracking);
-		text-transform: uppercase;
-		flex-shrink: 0;
-		margin-left: var(--space-sm);
 	}
 </style>

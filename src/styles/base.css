@@ -15,7 +15,7 @@ body {
 	background: var(--bg);
 	color: var(--text);
 	overflow: hidden;
-	letter-spacing: 0.005em;
+	letter-spacing: var(--text-tracking);
 	font-feature-settings:
 		'ss01' 1,
 		'zero' 1,

@@ -1,26 +1,42 @@
 import type { ContentRow } from './model';
 
-export function editSize(s: string): number {
-	return Math.min(Math.max(s.length + 1, 4), 60);
-}
+const JSON_NUMBER = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
 
-export function valueTypeLabel(k: ContentRow['kind']): string {
-	switch (k) {
-		case 'string':
-			return 'Str';
+export type EditedKind = 'string' | 'number' | 'bool' | 'json';
+
+/**
+ * What an edited value is saved as. A number field keeps a number and a bool field keeps true/false;
+ * anything else typed there becomes a string instead of being thrown away. A null field takes any
+ * JSON (`json`), and otherwise a string too.
+ */
+export function editedKind(kind: ContentRow['kind'], buffer: string): EditedKind {
+	if (buffer.includes('\n')) return 'string'; // Shift+Enter turned the value into multi-line text
+	const t = buffer.trim();
+	switch (kind) {
 		case 'number':
-			return 'Num';
+			return JSON_NUMBER.test(t) ? 'number' : 'string';
 		case 'bool':
-			return 'Bool';
+			return t === 'true' || t === 'false' ? 'bool' : 'string';
 		case 'null':
-			return 'Null';
-		case 'object':
-		case 'array':
-			return 'Val';
+			try {
+				JSON.parse(t);
+				return 'json';
+			} catch {
+				return 'string';
+			}
+		default:
+			return 'string';
 	}
 }
 
-const JSON_NUMBER = /^-?(0|[1-9]\d*)(\.\d+)?([eE][+-]?\d+)?$/;
+/**
+ * Width of a one-line edit field: exactly its text (the font is monospace, so each character is 1ch
+ * plus the body's letter spacing) plus the side padding, so nothing after it moves.
+ */
+export function editWidth(s: string): string {
+	const n = Math.min(Math.max(s.length, 1), 60);
+	return `calc(${n} * (1ch + var(--text-tracking, 0em)) + 2 * var(--space-xs))`;
+}
 
 export function nextNumberValue(buffer: string, delta: number): string {
 	const t = buffer.trim();
@@ -47,8 +63,9 @@ export interface EditDeps extends EditCallbacks {
 }
 
 export function createEditHandlers(deps: EditDeps) {
+	// Multi-line string: Enter saves, Shift+Enter adds a line (the textarea's own behaviour).
 	function onAreaKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
 			e.stopPropagation();
 			deps.onCommit();
@@ -70,24 +87,6 @@ export function createEditHandlers(deps: EditDeps) {
 		const next = e.relatedTarget as Node | null;
 		if (next && (e.currentTarget as HTMLElement).contains(next)) return;
 		deps.onCommit();
-	}
-
-	function onBoolKeydown(e: KeyboardEvent) {
-		if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-			e.preventDefault();
-			e.stopPropagation();
-			deps.onInput(deps.buffer() === 'true' ? 'false' : 'true');
-		} else if (e.key === 'Enter') {
-			e.preventDefault();
-			e.stopPropagation();
-			deps.onCommit();
-		} else if (e.key === 'Escape') {
-			e.preventDefault();
-			e.stopPropagation();
-			deps.onCancel();
-		} else {
-			e.stopPropagation();
-		}
 	}
 
 	function onNumberKeydown(e: KeyboardEvent) {
@@ -122,7 +121,6 @@ export function createEditHandlers(deps: EditDeps) {
 		onAreaKeydown,
 		commitBool,
 		onBoolFocusOut,
-		onBoolKeydown,
 		onNumberKeydown,
 		onEditKeydown,
 	};
