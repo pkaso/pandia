@@ -75,7 +75,7 @@ export const noirHighlight = HighlightStyle.define([
 	{ tag: t.number, color: 'var(--syntax-number)' },
 	{ tag: t.bool, color: 'var(--syntax-boolean)' },
 	{ tag: t.null, color: 'var(--syntax-null)', fontStyle: 'italic' },
-	{ tag: t.propertyName, color: 'var(--text)' },
+	{ tag: t.propertyName, color: 'var(--syntax-key)' },
 	{ tag: t.brace, color: 'var(--syntax-punct)' },
 	{ tag: t.bracket, color: 'var(--syntax-punct)' },
 	{ tag: t.separator, color: 'var(--syntax-punct)' },

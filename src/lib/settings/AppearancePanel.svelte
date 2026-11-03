@@ -1,8 +1,14 @@
 <script lang="ts">
-	import { appearancePrefs, FONT_SIZE_MIN, FONT_SIZE_MAX } from './state/appearance-prefs.svelte';
+	import {
+		appearancePrefs,
+		FONT_SIZE_MIN,
+		FONT_SIZE_MAX,
+		type ThemeMode,
+	} from './state/appearance-prefs.svelte';
 	import {
 		THEMES,
 		THEME_FAMILIES,
+		FALLBACK_THEMES,
 		familyOf,
 		type Theme,
 		type Density,
@@ -13,52 +19,46 @@
 		void appearancePrefs.init();
 	});
 
-	type Mode = 'dark' | 'light' | 'auto';
-	const activeTheme = $derived(THEMES[appearancePrefs.themeId]);
-	const mode: Mode = $derived(
-		appearancePrefs.autoMode ? 'auto' : (activeTheme?.colorScheme ?? 'dark'),
-	);
+	const MODES: Array<{ id: ThemeMode; label: string }> = [
+		{ id: 'system', label: 'System' },
+		{ id: 'light', label: 'Light' },
+		{ id: 'dark', label: 'Dark' },
+	];
+	const mode = $derived(appearancePrefs.mode);
 
-	const DEFAULT_FAMILY = THEME_FAMILIES[0];
-
-	async function setMode(next: Mode) {
-		if (mode === next) return;
-		const fam = familyOf(appearancePrefs.themeId) ?? DEFAULT_FAMILY;
-		if (!fam) return;
-		if (next === 'auto') {
-			const id = fam.dark && fam.light ? fam.dark : DEFAULT_FAMILY?.dark;
-			if (id) await appearancePrefs.setAuto(id);
-			return;
-		}
-		const id = fam[next] ?? DEFAULT_FAMILY?.[next];
-		if (id) await appearancePrefs.setTheme(id);
-	}
+	const darkOnly = THEME_FAMILIES.filter((f) => !f.light).map((f) => f.name);
+	const darkOnlyList =
+		darkOnly.length > 1
+			? `${darkOnly.slice(0, -1).join(', ')} and ${darkOnly.at(-1)}`
+			: (darkOnly[0] ?? '');
+	const lightFallbackName = familyOf(FALLBACK_THEMES.light.id)?.name ?? FALLBACK_THEMES.light.label;
 
 	interface FamilyPick {
 		key: string;
 		name: string;
 		theme: Theme;
 		active: boolean;
+		darkOnly: boolean;
 		apply: () => void;
 	}
 
 	const visibleFamilies: FamilyPick[] = $derived(
 		THEME_FAMILIES.flatMap((f) => {
-			if (mode === 'auto') {
-				if (!f.dark || !f.light) return [];
-				const darkId = f.dark;
-				const theme = THEMES[appearancePrefs.systemPrefersDark ? f.dark : f.light];
-				if (!theme) return [];
-				const active =
-					appearancePrefs.autoMode &&
-					(f.dark === appearancePrefs.themeId || f.light === appearancePrefs.themeId);
+			if (mode === 'system') {
+				const anyId = f.dark ?? f.light;
+				// Preview the family's own palette for the current OS scheme, or its only one.
+				const previewId = (appearancePrefs.systemPrefersDark ? f.dark : f.light) ?? anyId;
+				const theme = previewId ? THEMES[previewId] : undefined;
+				if (!anyId || !theme) return [];
+				const active = familyOf(appearancePrefs.themeId) === f;
 				return [
 					{
 						key: f.name,
 						name: f.name,
 						theme,
 						active,
-						apply: () => appearancePrefs.setAuto(darkId),
+						darkOnly: !f.light,
+						apply: () => appearancePrefs.setAuto(anyId),
 					},
 				];
 			}
@@ -67,7 +67,14 @@
 			if (!id || !theme) return [];
 			const active = !appearancePrefs.autoMode && appearancePrefs.themeId === id;
 			return [
-				{ key: f.name, name: f.name, theme, active, apply: () => appearancePrefs.setTheme(id) },
+				{
+					key: f.name,
+					name: f.name,
+					theme,
+					active,
+					darkOnly: false,
+					apply: () => appearancePrefs.setTheme(id),
+				},
 			];
 		}),
 	);
@@ -136,7 +143,7 @@
 			<h2 class="settings-title">Appearance</h2>
 			<button
 				class={resetArm.armed ? 'btn btn-danger' : 'btn btn-ghost'}
-				title="Resets the theme to Auto (follows your system), and font, size, and density to their defaults"
+				title="Resets the theme to GitHub following your system, and font, size, and density to their defaults"
 				onclick={() => resetArm.press(restoreDefaults)}
 				>{resetArm.armed ? 'Click again to restore' : 'Restore defaults'}</button
 			>
@@ -148,21 +155,13 @@
 		<div class="field-label">theme</div>
 		<div class="field-control">
 			<div class="seg mode-toggle" role="group" aria-label="theme mode">
-				<button
-					class:active={mode === 'dark'}
-					aria-pressed={mode === 'dark'}
-					onclick={() => setMode('dark')}>Dark</button
-				>
-				<button
-					class:active={mode === 'light'}
-					aria-pressed={mode === 'light'}
-					onclick={() => setMode('light')}>Light</button
-				>
-				<button
-					class:active={mode === 'auto'}
-					aria-pressed={mode === 'auto'}
-					onclick={() => setMode('auto')}>Auto</button
-				>
+				{#each MODES as m (m.id)}
+					<button
+						class:active={mode === m.id}
+						aria-pressed={mode === m.id}
+						onclick={() => appearancePrefs.setMode(m.id)}>{m.label}</button
+					>
+				{/each}
 			</div>
 			<div class="theme-grid">
 				{#each visibleFamilies as f (f.key)}
@@ -173,17 +172,20 @@
 							<span class="dot" style="background: {f.theme.colors.syntaxString}"></span>
 							<span class="dot" style="background: {f.theme.colors.syntaxNumber}"></span>
 						</span>
-						<span class="label-l">{f.name}</span>
+						<span class="label-l"
+							>{f.name}{#if f.darkOnly}<span class="dim"> · dark only</span>{/if}</span
+						>
 					</button>
 				{/each}
 			</div>
-			{#if mode === 'light'}
-				<div class="dim text-sm note">Dracula, Nord and Monokai are dark-only.</div>
-			{:else if mode === 'auto'}
+			{#if mode === 'light' && darkOnlyList}
+				<div class="dim text-sm note">{darkOnlyList} are dark-only.</div>
+			{:else if mode === 'system'}
 				<div class="dim text-sm note">
 					Follows your system appearance (currently {appearancePrefs.systemPrefersDark
 						? 'dark'
-						: 'light'}). Dark-only families aren't available in Auto.
+						: 'light'}).{#if darkOnlyList}
+						Dark-only themes use {lightFallbackName} Light when your system is light.{/if}
 				</div>
 			{/if}
 		</div>

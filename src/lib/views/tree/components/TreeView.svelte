@@ -644,7 +644,7 @@
 	}
 
 	.k {
-		color: var(--text);
+		color: var(--syntax-key);
 		flex-shrink: 0;
 		white-space: nowrap;
 	}

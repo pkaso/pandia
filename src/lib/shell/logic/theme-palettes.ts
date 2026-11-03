@@ -132,69 +132,73 @@ export const SOLARIZED_LIGHT: Theme = {
 	},
 };
 
+// Classic "GitHub Dark" from the GitHub VS Code theme (themes/dark.json), not "GitHub Dark Default".
 export const GITHUB_DARK: Theme = {
 	id: 'dark-github',
-	label: 'Dark (GitHub)',
+	label: 'GitHub Dark',
 	colorScheme: 'dark',
 	colors: {
-		bg: '#0D1117',
-		bgElev: '#161B22',
-		bgElev2: '#21262D',
-		bgElev3: '#30363D',
-		bgEdit: '#010409',
-		rule: '#30363D',
-		rule2: '#444C56',
-		text: '#E6EDF3',
-		textDim: '#8B949E',
-		textFaint: '#6E7681',
-		textGhost: '#484F58',
-		accent: '#58A6FF',
-		accentSoft: 'rgba(88, 166, 255, 0.12)',
-		accentLine: 'rgba(88, 166, 255, 0.50)',
-		accentFill: 'rgba(88, 166, 255, 0.22)',
-		accent2: '#FFA657',
-		syntaxString: '#A5D6FF',
-		syntaxNumber: '#79C0FF',
-		syntaxBoolean: '#79C0FF',
-		syntaxNull: '#8B949E',
-		syntaxPunct: '#8B949E',
-		syntaxUrl: '#58A6FF',
-		success: '#3FB950',
-		warning: '#D29922',
-		danger: '#F85149',
+		bg: '#24292E', // editor.background
+		bgElev: '#1F2428', // sideBar / panel / tabs
+		bgElev2: '#282E34', // list.hoverBackground
+		bgElev3: '#39414A', // list.activeSelectionBackground
+		bgEdit: '#2F363D', // input.background
+		rule: '#1B1F23', // panel.border, sideBar.border
+		rule2: '#444D56',
+		text: '#E1E4E8', // editor.foreground
+		textDim: '#959DA5', // descriptionForeground
+		textFaint: '#6A737D', // comment
+		textGhost: '#444D56', // editorLineNumber.foreground
+		accent: '#79B8FF', // textLink.foreground
+		accentSoft: 'rgba(121, 184, 255, 0.12)',
+		accentLine: 'rgba(121, 184, 255, 0.50)',
+		accentFill: 'rgba(51, 146, 255, 0.27)', // editor.selectionBackground #3392FF44
+		accent2: '#FFAB70', // variable
+		syntaxString: '#9ECBFF', // string
+		syntaxNumber: '#79B8FF', // constant
+		syntaxBoolean: '#79B8FF', // constant
+		syntaxNull: '#79B8FF', // constant
+		syntaxPunct: '#E1E4E8', // no scope colour: editor.foreground
+		syntaxUrl: '#79B8FF',
+		syntaxKey: '#79B8FF', // support (support.type.property-name.json)
+		success: '#34D058', // gitDecoration.addedResourceForeground
+		warning: '#FFEA7F', // editorWarning.foreground
+		danger: '#F97583', // editorError.foreground
 	},
 };
 
+// Classic "GitHub Light" from the GitHub VS Code theme (themes/light.json), not "GitHub Light Default".
 export const GITHUB_LIGHT: Theme = {
 	id: 'light-github',
-	label: 'Light (GitHub)',
+	label: 'GitHub Light',
 	colorScheme: 'light',
 	colors: {
-		bg: '#FFFFFF',
-		bgElev: '#F6F8FA',
-		bgElev2: '#EAEEF2',
-		bgElev3: '#D8DEE4',
-		bgEdit: '#FCFCFD',
-		rule: '#D0D7DE',
-		rule2: '#AFB8C1',
-		text: '#1F2328',
-		textDim: '#646C75',
-		textFaint: '#8C959F',
-		textGhost: '#D0D7DE',
-		accent: '#0969DA',
-		accentSoft: 'rgba(9, 105, 218, 0.08)',
-		accentLine: 'rgba(9, 105, 218, 0.40)',
-		accentFill: 'rgba(9, 105, 218, 0.14)',
-		accent2: '#953800',
-		syntaxString: '#0A3069',
-		syntaxNumber: '#0550AE',
-		syntaxBoolean: '#0550AE',
-		syntaxNull: '#6E7781',
-		syntaxPunct: '#656D76',
-		syntaxUrl: '#0969DA',
-		success: '#1A7F37',
-		warning: '#9A6700',
-		danger: '#CF222E',
+		bg: '#FFFFFF', // editor.background
+		bgElev: '#F6F8FA', // sideBar / panel / tabs
+		bgElev2: '#EBF0F4', // list.hoverBackground
+		bgElev3: '#E2E5E9', // list.activeSelectionBackground
+		bgEdit: '#FAFBFC', // input.background
+		rule: '#E1E4E8', // panel.border, sideBar.border
+		rule2: '#D1D5DA',
+		text: '#24292E', // editor.foreground
+		textDim: '#6A737D', // descriptionForeground
+		textFaint: '#959DA5',
+		textGhost: '#D1D5DA', // editorWhitespace.foreground
+		accent: '#0366D6', // textLink.foreground
+		accentSoft: 'rgba(3, 102, 214, 0.08)',
+		accentLine: 'rgba(3, 102, 214, 0.40)',
+		accentFill: 'rgba(3, 102, 214, 0.15)', // editor.selectionBackground #0366d625
+		accent2: '#E36209', // variable
+		syntaxString: '#032F62', // string
+		syntaxNumber: '#005CC5', // constant
+		syntaxBoolean: '#005CC5', // constant
+		syntaxNull: '#005CC5', // constant
+		syntaxPunct: '#24292E', // no scope colour: editor.foreground
+		syntaxUrl: '#0366D6',
+		syntaxKey: '#005CC5', // support (support.type.property-name.json)
+		success: '#22863A', // markup.inserted
+		warning: '#B08800', // editorWarning #f9c513 is unreadable as text on white; Primer's darker yellow
+		danger: '#CB2431', // editorError.foreground
 	},
 };
 
@@ -656,9 +660,9 @@ export interface ThemeFamily {
 }
 
 export const THEME_FAMILIES: ThemeFamily[] = [
+	{ name: 'GitHub', dark: GITHUB_DARK.id, light: GITHUB_LIGHT.id },
 	{ name: 'Default', dark: DEFAULT_THEME.id, light: LIGHT_THEME.id },
 	{ name: 'Solarized', dark: SOLARIZED_DARK.id, light: SOLARIZED_LIGHT.id },
-	{ name: 'GitHub', dark: GITHUB_DARK.id, light: GITHUB_LIGHT.id },
 	{ name: 'Gruvbox', dark: GRUVBOX_DARK.id, light: GRUVBOX_LIGHT.id },
 	{ name: 'One', dark: ONE_DARK.id, light: ONE_LIGHT.id },
 	{ name: 'Tokyo Night', dark: TOKYO_NIGHT.id, light: TOKYO_NIGHT_LIGHT.id },
@@ -671,4 +675,16 @@ export const THEME_FAMILIES: ThemeFamily[] = [
 
 export function familyOf(themeId: string): ThemeFamily | undefined {
 	return THEME_FAMILIES.find((f) => f.dark === themeId || f.light === themeId);
+}
+
+/** What a fresh install starts on, and what a family without a given scheme falls back to. */
+export const FALLBACK_THEMES: Record<Theme['colorScheme'], Theme> = {
+	dark: GITHUB_DARK,
+	light: GITHUB_LIGHT,
+};
+
+/** The theme to show for `scheme`, staying in `themeId`'s family when it has one in that scheme. */
+export function themeForScheme(themeId: string, scheme: Theme['colorScheme']): Theme {
+	const id = familyOf(themeId)?.[scheme];
+	return (id && THEMES[id]) || FALLBACK_THEMES[scheme];
 }

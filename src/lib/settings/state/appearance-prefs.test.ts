@@ -22,4 +22,40 @@ describe('appearancePrefs', () => {
 		expect(style.getPropertyValue('--font-mono')).not.toContain('Fira Code');
 		expect(style.getPropertyValue('--font-size-base')).not.toBe('16px');
 	});
+
+	it('starts on GitHub, following the system', async () => {
+		vi.mocked(loadPersisted).mockResolvedValue(undefined);
+		await appearancePrefs.reload();
+		expect(appearancePrefs.mode).toBe('system');
+		appearancePrefs.systemPrefersDark = true;
+		expect(appearancePrefs.resolvedTheme.id).toBe('dark-github');
+		appearancePrefs.systemPrefersDark = false;
+		expect(appearancePrefs.resolvedTheme.id).toBe('light-github');
+	});
+
+	it('keeps a dark-only pick in System mode and shows GitHub Light when the system is light', async () => {
+		vi.mocked(loadPersisted).mockResolvedValue({ themeId: 'dark-dracula', autoMode: true });
+		await appearancePrefs.reload();
+		appearancePrefs.systemPrefersDark = true;
+		expect(appearancePrefs.resolvedTheme.id).toBe('dark-dracula');
+		appearancePrefs.systemPrefersDark = false;
+		expect(appearancePrefs.resolvedTheme.id).toBe('light-github');
+		expect(appearancePrefs.themeId).toBe('dark-dracula');
+	});
+
+	it('switches mode within the family, falling back to GitHub when it lacks the scheme', async () => {
+		vi.mocked(loadPersisted).mockResolvedValue({ themeId: 'dark-solarized', autoMode: false });
+		await appearancePrefs.reload();
+		expect(appearancePrefs.mode).toBe('dark');
+		await appearancePrefs.setMode('light');
+		expect(appearancePrefs.themeId).toBe('light-solarized');
+
+		await appearancePrefs.setTheme('dark-nord');
+		await appearancePrefs.setMode('light');
+		expect(appearancePrefs.themeId).toBe('light-github');
+		await appearancePrefs.setMode('dark');
+		expect(appearancePrefs.themeId).toBe('dark-github');
+		await appearancePrefs.setMode('system');
+		expect(appearancePrefs.mode).toBe('system');
+	});
 });

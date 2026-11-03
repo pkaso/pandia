@@ -324,7 +324,7 @@
 		color: var(--syntax-boolean);
 	}
 	.tok-key {
-		color: var(--text);
+		color: var(--syntax-key);
 	}
 	.tok-punct {
 		color: var(--syntax-punct);

@@ -8,16 +8,19 @@ import {
 	applyTheme,
 	resetAppearance,
 	THEMES,
-	DEFAULT_THEME,
-	familyOf,
+	FALLBACK_THEMES,
+	themeForScheme,
 	type Density,
+	type Theme,
 } from '$lib/shell/logic/theme';
+
+export type ThemeMode = 'system' | 'light' | 'dark';
 
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 
 const STORE_KEY = 'appearance';
 
-const DEFAULT_THEME_ID = DEFAULT_THEME.id;
+const DEFAULT_THEME_ID = FALLBACK_THEMES.dark.id;
 const DEFAULT_AUTO_MODE = true;
 const DEFAULT_MONO = 'IBM Plex Mono';
 const DEFAULT_FONT_SIZE = 13;
@@ -31,8 +34,10 @@ function clampFontSize(px: number): number {
 }
 
 interface Persisted {
+	/** The picked theme; in System mode only its family matters. */
 	themeId: string;
-	autoMode: boolean; // follow the OS dark/light preference (using themeId's family)
+	/** System mode: follow the OS dark/light preference within themeId's family. */
+	autoMode: boolean;
 	fontFamily: string;
 	fontSizeBase: number;
 	density: Density;
@@ -110,17 +115,21 @@ class AppearancePrefs extends PersistedStore {
 		});
 	}
 
-	private resolvedId(): string {
-		if (!this.autoMode) return this.themeId;
-		const fam = familyOf(this.themeId);
-		if (!fam?.dark || !fam.light) return this.themeId;
-		return this.systemPrefersDark ? fam.dark : fam.light;
+	get mode(): ThemeMode {
+		if (this.autoMode) return 'system';
+		return THEMES[this.themeId]?.colorScheme ?? 'dark';
+	}
+
+	/** The theme on screen: in System mode, themeId's family member for the OS scheme, else GitHub's. */
+	get resolvedTheme(): Theme {
+		if (this.autoMode) {
+			return themeForScheme(this.themeId, this.systemPrefersDark ? 'dark' : 'light');
+		}
+		return THEMES[this.themeId] ?? FALLBACK_THEMES.dark;
 	}
 
 	private applyResolved(): void {
-		const id = this.resolvedId();
-		if (id !== this.themeId) this.themeId = id;
-		applyTheme(THEMES[id] ?? DEFAULT_THEME);
+		applyTheme(this.resolvedTheme);
 	}
 
 	private applyAll(): void {
@@ -151,12 +160,19 @@ class AppearancePrefs extends PersistedStore {
 	}
 
 	async setAuto(idInFamily: string): Promise<void> {
-		const fam = familyOf(idInFamily);
-		if (!fam?.dark || !fam.light) return;
+		if (!THEMES[idInFamily]) return;
+		if (this.autoMode && this.themeId === idInFamily) return;
 		this.autoMode = true;
 		this.themeId = idInFamily;
 		this.applyResolved();
 		await this.persist();
+	}
+
+	/** Switches mode, staying in the current family; a family without that scheme falls back to GitHub. */
+	async setMode(next: ThemeMode): Promise<void> {
+		if (this.mode === next) return;
+		if (next === 'system') return this.setAuto(this.themeId);
+		return this.setTheme(themeForScheme(this.themeId, next).id);
 	}
 
 	async setFontFamily(family: string): Promise<void> {

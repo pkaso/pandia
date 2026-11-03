@@ -23,6 +23,8 @@ export interface ThemeColors {
 	syntaxNull: string;
 	syntaxPunct: string;
 	syntaxUrl: string;
+	/** Object keys; themes that leave keys uncoloured omit it and keys use `text`. */
+	syntaxKey?: string;
 	success: string;
 	warning: string;
 	danger: string;
@@ -58,6 +60,8 @@ export {
 	THEMES,
 	THEME_FAMILIES,
 	familyOf,
+	FALLBACK_THEMES,
+	themeForScheme,
 	type ThemeFamily,
 } from './theme-palettes';
 
@@ -91,6 +95,7 @@ export function applyTheme(theme: Theme): void {
 	r.style.setProperty('--syntax-null', theme.colors.syntaxNull);
 	r.style.setProperty('--syntax-punct', theme.colors.syntaxPunct);
 	r.style.setProperty('--syntax-url', theme.colors.syntaxUrl);
+	r.style.setProperty('--syntax-key', theme.colors.syntaxKey ?? theme.colors.text);
 	r.style.setProperty('--success', theme.colors.success);
 	r.style.setProperty('--warning', theme.colors.warning);
 	r.style.setProperty('--danger', theme.colors.danger);
