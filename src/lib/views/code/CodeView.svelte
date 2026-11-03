@@ -61,6 +61,7 @@
 	import { describeError } from '$lib/ipc/error-copy';
 	import { pathKey } from '$lib/views/tree/logic/model';
 	import { noirHighlight, noirTheme } from './logic/codemirror-theme';
+	import { searchMatches } from './logic/search-highlight';
 	import type { DocHandle, Path } from '$lib/ipc/bindings';
 	import { diffHighlightExtension, setHighlights, type Highlight } from './logic/highlights';
 
@@ -268,6 +269,7 @@
 							json(),
 							diffHighlightExtension(),
 							search(),
+							searchMatches,
 							keymap.of([
 								{ key: 'Mod-[', run: foldCode },
 								{ key: 'Mod-]', run: unfoldCode },

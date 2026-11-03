@@ -25,6 +25,9 @@ export interface ThemeColors {
 	syntaxUrl: string;
 	/** Object keys; themes that leave keys uncoloured omit it and keys use `text`. */
 	syntaxKey?: string;
+	/** Find matches; themes that leave them out get tints of `warning`, as VS Code's defaults are. */
+	findMatch?: string;
+	findMatchCurrent?: string;
 	success: string;
 	warning: string;
 	danger: string;
@@ -115,6 +118,8 @@ function setDerivedShades(r: HTMLElement, theme: Theme): void {
 	const onAccent = readableOn(c.accent, c.bg);
 	r.style.setProperty('--on-accent', onAccent);
 	r.style.setProperty('--selection-text', selectionText(c));
+	r.style.setProperty('--find-match', c.findMatch ?? withAlpha(c.warning, 0.22));
+	r.style.setProperty('--find-current', c.findMatchCurrent ?? withAlpha(c.warning, 0.45));
 	r.style.setProperty('--accent-hover', hoverShade(c.accent, onAccent));
 	r.style.setProperty('--danger-hover', hoverShade(c.danger, c.bg));
 	r.style.setProperty('--danger-soft', mixHex(c.bg, c.danger, SOFT_MIX));

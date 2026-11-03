@@ -161,6 +161,8 @@ export const GITHUB_DARK: Theme = {
 		syntaxPunct: '#E1E4E8', // no scope colour: editor.foreground
 		syntaxUrl: '#79B8FF',
 		syntaxKey: '#79B8FF', // support (support.type.property-name.json)
+		findMatch: 'rgba(255, 211, 61, 0.13)', // editor.findMatchHighlightBackground #ffd33d22
+		findMatchCurrent: 'rgba(255, 211, 61, 0.27)', // editor.findMatchBackground #ffd33d44
 		success: '#34D058', // gitDecoration.addedResourceForeground
 		warning: '#FFEA7F', // editorWarning.foreground
 		danger: '#F97583', // editorError.foreground
@@ -196,6 +198,8 @@ export const GITHUB_LIGHT: Theme = {
 		syntaxPunct: '#24292E', // no scope colour: editor.foreground
 		syntaxUrl: '#0366D6',
 		syntaxKey: '#005CC5', // support (support.type.property-name.json)
+		findMatch: 'rgba(255, 223, 93, 0.40)', // editor.findMatchHighlightBackground #ffdf5d66
+		findMatchCurrent: '#FFDF5D', // editor.findMatchBackground
 		success: '#22863A', // markup.inserted
 		warning: '#B08800', // editorWarning #f9c513 is unreadable as text on white; Primer's darker yellow
 		danger: '#CB2431', // editorError.foreground

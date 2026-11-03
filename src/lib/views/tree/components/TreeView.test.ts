@@ -81,3 +81,70 @@ describe('TreeView scrolling', () => {
 		},
 	);
 });
+
+describe('TreeView search marks', () => {
+	function objectRows(): Row[] {
+		const rows: Row[] = [{ ...rootRow('object', 2), expanded: true }];
+		const children: ContentRow[] = [
+			{
+				variant: 'content',
+				path: ['name'],
+				depth: 1,
+				key: 'name',
+				kind: 'string',
+				preview: '"Pandia"',
+				childCount: null,
+				expanded: false,
+			},
+			{
+				variant: 'content',
+				path: ['count'],
+				depth: 1,
+				key: 'count',
+				kind: 'number',
+				preview: '42',
+				childCount: null,
+				expanded: false,
+			},
+		];
+		insertChildrenWithClose(rows, 0, children, 2);
+		return rows;
+	}
+
+	function marksFor(
+		searchQuery: string,
+		activeMatch: { path: (string | number)[]; matchField: 'key' | 'value' } | null,
+	) {
+		const { container } = render(TreeView, {
+			props: {
+				rows: objectRows(),
+				selectedIndex: -1,
+				onToggle: () => {},
+				onSelect: () => {},
+				onVisibleRange: () => {},
+				onRowMenu: () => {},
+				onRowAction: () => {},
+				scrollRequest: null,
+				editing: null,
+				onEditInput: () => {},
+				onEditCommit: () => {},
+				onEditCancel: () => {},
+				searchQuery,
+				activeMatch,
+			},
+		});
+		flushSync();
+		return [...container.querySelectorAll('mark.hit')].map(
+			(m) => `${m.textContent}${m.classList.contains('current') ? '*' : ''}`,
+		);
+	}
+
+	it('marks matches in keys and string values, and the current match more strongly', () => {
+		expect(marksFor('n', { path: ['name'], matchField: 'value' })).toEqual(['n', 'n*', 'n']);
+	});
+
+	it('leaves numbers and an empty query unmarked', () => {
+		expect(marksFor('4', null)).toEqual([]);
+		expect(marksFor('', null)).toEqual([]);
+	});
+});

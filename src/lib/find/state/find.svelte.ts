@@ -91,6 +91,8 @@ export class FindController {
 		if (this.activeJobId !== null || this.busy) this.cancel();
 		this.open = false;
 		this.error = null;
+		// The editor marks every match of its query; drop them with the bar. Reopening searches again.
+		if (this.deps.isCodeView()) this.deps.codeApi()?.cmSearch('', false);
 	};
 
 	syncActiveView = () => {

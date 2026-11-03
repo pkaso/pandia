@@ -62,11 +62,8 @@ export const noirTheme = EditorView.theme(
 			padding: '0 var(--space-xs)',
 			margin: '0 var(--space-2xs)',
 		},
-		'.cm-searchMatch': { backgroundColor: 'var(--accent-soft)' },
-		'.cm-searchMatch-selected': {
-			backgroundColor: 'var(--accent-fill)',
-			outline: '1px solid var(--accent)',
-		},
+		'.cm-searchMatch': { backgroundColor: 'var(--find-match)' },
+		'.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'var(--find-current)' },
 		'.cm-lintRange-error': {
 			backgroundImage: 'none',
 			textDecoration: 'underline wavy var(--danger)',

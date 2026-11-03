@@ -29,6 +29,8 @@
 	--syntax-url: #9c6bff;
 	--syntax-key: var(--text);
 	--selection-text: var(--text);
+	--find-match: rgba(224, 165, 60, 0.22);
+	--find-current: rgba(224, 165, 60, 0.45);
 
 	--success: #7fb069;
 	--warning: #e0a53c;

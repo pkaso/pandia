@@ -14,7 +14,7 @@
 		type Row,
 		type VirtualGapRow,
 	} from '../logic/model';
-	import { chipText, openBracket, renderKey, detectUrl } from '../logic/row-format';
+	import { chipText, openBracket, renderKey, detectUrl, splitMatches } from '../logic/row-format';
 	import { mayBeImage } from '$lib/views/shared/image-source';
 	import { imagePreview } from '$lib/views/shared/image-preview.svelte';
 	import { editActionFor } from '../logic/row-menu-model';
@@ -24,7 +24,7 @@
 	import { ChevronDown, ChevronRight, GripVertical, MoreHorizontal } from '@lucide/svelte';
 	import { DEFAULT_ROW_H, OVERSCAN, scaledOffset } from '$lib/views/shared/scroll-math';
 	import { WindowedScroller } from '$lib/views/shared/windowed-scroller.svelte';
-	import type { DiffKind, Path } from '$lib/ipc/bindings';
+	import type { DiffKind, MatchField, Path } from '$lib/ipc/bindings';
 	import InlineCellEditor from './InlineCellEditor.svelte';
 	import { fmtKbd } from '$lib/util/platform';
 
@@ -68,6 +68,11 @@
 		onMaterializeGap?: (gap: VirtualGapRow, fromIdx: number, toIdx: number) => void;
 
 		readString?: (path: Path) => Promise<string | null>;
+
+		/** Find-bar query whose matches in keys and string values are marked. */
+		searchQuery?: string;
+		/** The find bar's current match, marked more strongly. */
+		activeMatch?: { path: Path; matchField: MatchField } | null;
 	}
 
 	let {
@@ -91,7 +96,14 @@
 		onScrollerReady,
 		onMaterializeGap,
 		readString,
+		searchQuery = '',
+		activeMatch = null,
 	}: Props = $props();
+
+	const activeMatchKey = $derived(activeMatch ? pathKey(activeMatch.path) : null);
+	function isCurrent(row: ContentRow, field: MatchField): boolean {
+		return activeMatch?.matchField === field && activeMatchKey === pathKey(row.path);
+	}
 
 	const cutKey = $derived(cutPath ? pathKey(cutPath) : null);
 	const editingKey = $derived(editing ? pathKey(editing.path) : null);
@@ -365,6 +377,15 @@
 	const stopAutoScroll = () => autoScroller.stop();
 </script>
 
+<!-- Search covers object keys and string values, so only those are marked. -->
+{#snippet marked(
+	text: string,
+	current: boolean,
+)}{#each splitMatches(text, searchQuery) as seg, j (j)}{#if seg.match}<mark
+				class="hit"
+				class:current>{seg.text}</mark
+			>{:else}{seg.text}{/if}{/each}{/snippet}
+
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="scroller"
@@ -441,7 +462,12 @@
 							onCancel={onEditCancel}
 						/>
 					{:else}
-						<span class="k" class:idx={typeof row.key === 'number'}>{renderKey(row)}</span>
+						<span class="k" class:idx={typeof row.key === 'number'}
+							>{#if typeof row.key === 'string' && row.depth > 0}{@render marked(
+									renderKey(row),
+									isCurrent(row, 'key'),
+								)}{:else}{renderKey(row)}{/if}</span
+						>
 					{/if}
 					{#if row.depth > 0 || row.kind !== 'object'}<span class="colon">:</span>{/if}
 					{#if editing?.field === 'value' && editingKey === pathKey(row.path)}
@@ -463,13 +489,18 @@
 							href={url}
 							onclick={(e) => onUrlClick(e, url)}
 							onpointerenter={image ? (e) => onImageHover(e, row) : undefined}
-							onpointerleave={image ? imagePreview.hoverEnd : undefined}>{row.preview}</a
+							onpointerleave={image ? imagePreview.hoverEnd : undefined}
+							>{@render marked(row.preview, isCurrent(row, 'value'))}</a
 						>
 					{:else}
 						<span
 							class="v {row.kind}"
 							onpointerenter={image ? (e) => onImageHover(e, row) : undefined}
-							onpointerleave={image ? imagePreview.hoverEnd : undefined}>{row.preview}</span
+							onpointerleave={image ? imagePreview.hoverEnd : undefined}
+							>{#if row.kind === 'string'}{@render marked(
+									row.preview,
+									isCurrent(row, 'value'),
+								)}{:else}{row.preview}{/if}</span
 						>
 					{/if}
 					{#if !readOnly}
@@ -546,6 +577,15 @@
 	.r:hover {
 		background: var(--bg-elev);
 	}
+	/* Same colours as the code view's search matches: the current one differs only by background. */
+	mark.hit {
+		background: var(--find-match);
+		color: inherit;
+	}
+	mark.hit.current {
+		background: var(--find-current);
+	}
+
 	.r.selected {
 		background: var(--accent-soft);
 		box-shadow: inset 2px 0 0 var(--accent);

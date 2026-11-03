@@ -536,6 +536,8 @@
 				onEditCancel={edit.cancel}
 				{invalidMarks}
 				cutPath={doc.cutMark?.path ?? null}
+				searchQuery={find.open ? find.query : ''}
+				activeMatch={find.open ? (find.hits[find.activeIdx] ?? null) : null}
 			/>
 			<FindBar
 				open={find.open}
