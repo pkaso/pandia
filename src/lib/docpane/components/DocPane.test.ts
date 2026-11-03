@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, onTestFinished } from 'vitest';
 import { flushSync } from 'svelte';
 import { fireEvent, render, within } from '@testing-library/svelte';
 import { ipc } from '$lib/ipc/client';
@@ -9,6 +9,7 @@ import { PaneCommandBus } from '$lib/shell/state/pane-bus';
 import { reactiveBox } from '$lib/views/shared/test-runes.svelte';
 import type { NodeView } from '$lib/ipc/bindings';
 import { commandRegistry } from '$lib/palette/state/command-store.svelte';
+import { sidebarPrefs } from '$lib/shell/state/sidebar-prefs.svelte';
 import DocPane from './DocPane.svelte';
 
 vi.mock('$lib/ipc/client', () => ({
@@ -109,6 +110,9 @@ describe('DocPane', () => {
 			notes: { convertedFrom: null, repairs: [] },
 		});
 		vi.mocked(ipc.docSummary).mockResolvedValue({ ...summary, version: 2, dirty: true });
+		await sidebarPrefs.setDefaultView('code'); // the code view is the first to show, as you use it
+		onTestFinished(() => void sidebarPrefs.setDefaultView('tree'));
+		vi.mocked(ipc.docCanonicalText).mockClear();
 		let edits: string | null = '{"edited":true}';
 		render(DocPane, {
 			props: {
@@ -119,6 +123,11 @@ describe('DocPane', () => {
 			},
 		});
 		await vi.waitFor(() => expect(ipc.docSetRootText).toHaveBeenCalledWith('R', '{"edited":true}'));
+		// The code view opens on the edited content: it loads its text only after the edits are in.
+		await vi.waitFor(() => expect(ipc.docCanonicalText).toHaveBeenCalledWith('R'));
+		const setAt = vi.mocked(ipc.docSetRootText).mock.invocationCallOrder[0]!;
+		const loadAt = vi.mocked(ipc.docCanonicalText).mock.invocationCallOrder.at(-1)!;
+		expect(loadAt).toBeGreaterThan(setAt);
 	});
 
 	it('recomputes a compare when the borrowed tab is edited', async () => {

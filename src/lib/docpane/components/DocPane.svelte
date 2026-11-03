@@ -339,7 +339,9 @@
 		const p = pendingOpen;
 		if (!p) return;
 		void (async () => {
-			const opened = await session.loadFromSource(p);
+			// A restored session reopens an edited file with its unsaved edits on top.
+			const edits = slot.takeRestoredEdits?.() ?? null;
+			const opened = await session.loadFromSource(p, { edits });
 			onOpened();
 			const s = session.summary;
 			const handoff = slot.handoff;
@@ -349,9 +351,6 @@
 				return;
 			}
 			handoff?.opened();
-			// A restored session reopens an edited file with its unsaved edits on top.
-			const edits = slot.takeRestoredEdits?.() ?? null;
-			if (edits !== null) await session.commitText(edits);
 			if (instructions?.compareWith) {
 				void compare.start({ kind: 'path', path: instructions.compareWith });
 			}

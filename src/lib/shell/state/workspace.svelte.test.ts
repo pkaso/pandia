@@ -502,6 +502,17 @@ describe('Workspace: keeping the session on quit', () => {
 		);
 	});
 
+	it('is not overwritten by a later snapshot of the open files', async () => {
+		const ws = new Workspace(prompts());
+		await ws.restore(Promise.resolve());
+		const id = await openTab(ws, '/w/edited.json');
+		pane(ws, id, { dirty: true });
+		expect(await ws.saveSession()).toBe(true);
+		vi.mocked(saveOpenTabs).mockClear();
+		await ws.snapshot(); // e.g. the debounced one, scheduled while the session was being kept
+		expect(saveOpenTabs).not.toHaveBeenCalled();
+	});
+
 	it('keeps nothing when a pending edit cannot be applied, so quitting asks as usual', async () => {
 		vi.mocked(saveOpenTabs).mockClear();
 		const ws = new Workspace(prompts());
@@ -515,6 +526,30 @@ describe('Workspace: keeping the session on quit', () => {
 		});
 		expect(await ws.saveSession()).toBe(false);
 		expect(saveOpenTabs).not.toHaveBeenCalled();
+	});
+
+	it("has a restored file's edits ready the moment its tab is told to open it", async () => {
+		// A tab reacts to its pending open straight away and asks for the edits then (as DocPane does).
+		const ws = new Workspace(prompts());
+		vi.mocked(loadOpenTabs).mockResolvedValue({
+			tabs: [{ path: '/w/edited.json', contentId: 'e' }],
+			activeIndex: 0,
+		});
+		vi.mocked(ipc.docSessionTake).mockResolvedValue('{"edited":true}');
+		vi.mocked(stat).mockResolvedValue({ size: 10 } as never);
+		const seen: (string | null)[] = [];
+		const stop = $effect.root(() => {
+			$effect(() => {
+				for (const [id, source] of Object.entries(ws.pendingOpens)) {
+					if (source) seen.push(ws.slot(id).takeRestoredEdits());
+				}
+			});
+		});
+		await ws.restore(Promise.resolve());
+		flushSync();
+		stop();
+		vi.mocked(ipc.docSessionTake).mockResolvedValue(null);
+		expect(seen).toEqual(['{"edited":true}']);
 	});
 
 	it('restores edited files with their edits, and untitled documents from their content', async () => {

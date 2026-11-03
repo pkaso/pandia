@@ -99,6 +99,8 @@ export class Workspace {
 	private restored = false;
 	/** Set once restore() has read the saved session, so snapshot() can't overwrite it first. */
 	private restoreDone = false;
+	/** Set once saveSession() has kept the session: a later snapshot() mustn't overwrite it. */
+	private sessionKept = false;
 	/** Unsaved edits to reapply to a restored file once its tab has opened it. */
 	private restoredEdits: Record<string, string> = {};
 
@@ -157,14 +159,19 @@ export class Workspace {
 
 	async open(
 		source: OpenSource,
-		opts: { focus?: boolean; handoff?: Handoff | null } = {},
+		opts: {
+			focus?: boolean;
+			handoff?: Handoff | null;
+			/** Unsaved content to put on top of the opened file (a restored session's edits). */
+			edits?: string;
+		} = {},
 	): Promise<OpenOutcome> {
 		if (source.kind !== 'text' && !(await this.mayOpen(source.path))) return { kind: 'declined' };
 		const focus = opts.focus ?? true;
 		const handoff = opts.handoff ?? null;
 		if (focus && this.reusable(this.activeId)) {
 			this.tabs = this.tabs.map((t) => (t.id === this.activeId ? { ...t, handoff } : t));
-			this.setPendingOpen(this.activeId, source);
+			this.setPendingOpen(this.activeId, source, opts.edits);
 			return { kind: 'opened', tabId: this.activeId };
 		}
 		if (this.tabs.length >= MAX_TABS) {
@@ -174,7 +181,7 @@ export class Workspace {
 		const t: TabRecord = { id: this.newId(), handoff };
 		this.tabs = [...this.tabs, t];
 		if (focus) this.activeId = t.id;
-		this.setPendingOpen(t.id, source);
+		this.setPendingOpen(t.id, source, opts.edits);
 		return { kind: 'opened', tabId: t.id };
 	}
 
@@ -233,11 +240,7 @@ export class Workspace {
 			// An edited file reopens as that file with the edits on top, so Save still writes to it;
 			// if the file has gone meanwhile, its content comes back as an untitled document.
 			if (content === null || (await fileExists(tab.path))) {
-				const outcome = await this.open({ kind: 'file', path: tab.path }, { focus });
-				if (outcome.kind === 'opened' && content !== null) {
-					this.restoredEdits[outcome.tabId] = content;
-				}
-				return outcome;
+				return this.open({ kind: 'file', path: tab.path }, { focus, edits: content ?? undefined });
 			}
 		}
 		if (content === null) return null;
@@ -252,7 +255,7 @@ export class Workspace {
 
 	/** Remembers the open files for the next launch, as they change (unsaved ones on quit). */
 	async snapshot(): Promise<void> {
-		if (!behaviorPrefs.restoreTabsOnLaunch || !this.restoreDone) return;
+		if (!behaviorPrefs.restoreTabsOnLaunch || !this.restoreDone || this.sessionKept) return;
 		const tabs: SessionTab[] = [];
 		let activeIndex = -1;
 		for (const t of this.tabs) {
@@ -298,6 +301,7 @@ export class Workspace {
 			tabs.push(tab);
 		}
 		await saveOpenTabs(tabs, activeIndex);
+		this.sessionKept = true;
 		await Promise.all(this.tabs.map((t) => t.handoff?.settle(t.id)));
 		return true;
 	}
@@ -412,7 +416,10 @@ export class Workspace {
 		);
 	}
 
-	private setPendingOpen(id: string, source: OpenSource): void {
+	private setPendingOpen(id: string, source: OpenSource, edits?: string): void {
+		// The edits are in place before the tab sees its pending open: it asks for them right away.
+		if (edits === undefined) delete this.restoredEdits[id];
+		else this.restoredEdits[id] = edits;
 		this.pendingOpens = { ...this.pendingOpens, [id]: source };
 	}
 

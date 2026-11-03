@@ -92,7 +92,10 @@ export class DocSessionController {
 
 	constructor(private deps: DocSessionDeps) {}
 
-	private load = async (opener: () => Promise<OpenOutcome>): Promise<boolean> => {
+	private load = async (
+		opener: () => Promise<OpenOutcome>,
+		edits: string | null = null,
+	): Promise<boolean> => {
 		const seq = ++this.loadSeq;
 		this.deps.setBusy(true);
 		this.deps.setError(null);
@@ -108,8 +111,18 @@ export class DocSessionController {
 				this.diagnosis = outcome.diagnosis;
 				return false;
 			}
+			let summary = outcome.summary;
+			if (edits !== null) {
+				// Applied before the document is published, so no view ever shows the version on disk.
+				try {
+					await ipc.docSetRootText(outcome.handle, edits);
+					summary = await ipc.docSummary(outcome.handle);
+				} catch (e) {
+					this.deps.setError(describeError(e));
+				}
+			}
 			this.handle = outcome.handle;
-			this.summary = outcome.summary;
+			this.summary = summary;
 			this.sourceName = outcome.summary.sourcePath ?? '(inline)';
 			this.repairInfo = repairInfoFrom(outcome.notes);
 			const root = rootRow(outcome.summary.rootKind, outcome.summary.rootChildCount);
@@ -127,11 +140,18 @@ export class DocSessionController {
 		}
 	};
 
-	loadFromSource = async (source: OpenSource): Promise<boolean> => {
+	/**
+	 * Opens `source`. `edits` (a restored session's unsaved content for this file) replaces the
+	 * content as an unsaved change before any view sees the document, so every view starts from it.
+	 */
+	loadFromSource = async (
+		source: OpenSource,
+		opts: { edits?: string | null } = {},
+	): Promise<boolean> => {
 		await this.deps.applyDefaultView(null);
 		await behaviorPrefs.init();
 		const repair = behaviorPrefs.autoRepairOnOpen;
-		if (!(await this.load(() => ipc.docOpen(source, { repair })))) {
+		if (!(await this.load(() => ipc.docOpen(source, { repair }), opts.edits ?? null))) {
 			this.failedName =
 				source.kind === 'file'
 					? basename(source.path)
