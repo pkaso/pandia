@@ -29,6 +29,7 @@ export interface ShellCommandDeps {
 	openWebsite: () => void;
 	openDiscussions: () => void;
 	reportIssue: () => void;
+	quit: () => void;
 
 	isDev: boolean;
 }
@@ -117,12 +118,14 @@ export function buildShellCommands(deps: ShellCommandDeps): Command[] {
 			run: () => deps.openSettings(),
 		},
 
-		...SETTINGS_TABS.slice(1).map((tab): Command => ({
-			id: `nav.settings.${tab.id}`,
-			label: `Open Settings: ${tab.label}`,
-			category: 'Navigate',
-			run: () => deps.openSettings(tab.id),
-		})),
+		...SETTINGS_TABS.slice(1).map(
+			(tab): Command => ({
+				id: `nav.settings.${tab.id}`,
+				label: `Open Settings: ${tab.label}`,
+				category: 'Navigate',
+				run: () => deps.openSettings(tab.id),
+			}),
+		),
 		...(deps.isDev
 			? ([
 					{
@@ -176,6 +179,12 @@ export function buildShellCommands(deps: ShellCommandDeps): Command[] {
 			label: 'About Pandia',
 			category: 'Help',
 			run: () => void deps.showAbout(),
+		},
+		{
+			id: 'app.quit',
+			label: 'Quit Pandia',
+			category: 'Help',
+			run: deps.quit,
 		},
 		{
 			id: 'app.checkForUpdates',

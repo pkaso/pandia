@@ -211,3 +211,42 @@ mod tests {
         assert!(stale.is_empty());
     }
 }
+
+// Session stash: on quit with "restore tabs on launch" on, each unsaved document's content is kept
+// here (apart from the crash backups, so the recovery prompt never offers it) and taken back on launch.
+
+fn session_dir(app: &AppHandle) -> std::io::Result<PathBuf> {
+    let base = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| std::io::Error::other(e.to_string()))?;
+    private_dir(base.join("session"))
+}
+
+fn session_path(app: &AppHandle, id: &str) -> std::io::Result<PathBuf> {
+    Ok(session_dir(app)?.join(format!("{}.json", sanitize_doc_id(id))))
+}
+
+pub fn session_stash(app: &AppHandle, id: &str, content: &str) -> std::io::Result<()> {
+    write_private(&session_path(app, id)?, content)
+}
+
+/// The stashed content for `id`, removed as it is read; None when there is none.
+pub fn session_take(app: &AppHandle, id: &str) -> std::io::Result<Option<String>> {
+    let path = session_path(app, id)?;
+    match std::fs::read_to_string(&path) {
+        Ok(text) => {
+            let _ = std::fs::remove_file(&path);
+            Ok(Some(text))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn session_clear(app: &AppHandle) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(session_dir(app)?)?.flatten() {
+        let _ = std::fs::remove_file(entry.path());
+    }
+    Ok(())
+}

@@ -59,6 +59,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             commands::doc_backup,
             commands::doc_backup_clear,
             commands::doc_backup_scan,
+            commands::doc_session_stash,
+            commands::doc_session_take,
+            commands::doc_session_clear,
             commands::doc_export,
             commands::doc_export_preview,
             commands::doc_export_to_file,
@@ -233,6 +236,18 @@ pub fn run() {
 
                 emit_file_open(app, paths);
             }
+            // Quitting from outside the app's own Quit item (the Dock, logging out) goes through the
+            // window first, so it can keep the session or ask about unsaved changes; it then exits
+            // with an explicit code, which passes. With no window left there is nothing to ask.
+            if let RunEvent::ExitRequested {
+                code: None, api, ..
+            } = &event
+            {
+                if let Some(window) = app.get_webview_window("main") {
+                    api.prevent_exit();
+                    let _ = window.emit("quit-requested", ());
+                }
+            }
             if let RunEvent::Exit = event {
                 app.state::<AppState>().handoffs.finish_all();
             }
@@ -261,7 +276,9 @@ fn build_menu(app: &tauri::AppHandle, ctx: &MenuContext) -> Result<Menu<tauri::W
         .item(&PredefinedMenuItem::hide_others(app, Some("Hide Others"))?)
         .item(&PredefinedMenuItem::show_all(app, Some("Show All"))?)
         .separator()
-        .item(&PredefinedMenuItem::quit(app, Some("Quit Pandia"))?)
+        // The app's own Quit (not the predefined one, which ends the app without asking the window)
+        // so quitting keeps the session or asks about unsaved changes, like closing the window.
+        .item(&item(app, "app.quit", "Quit Pandia")?)
         .build()?;
 
     let new_file = item(app, "doc.new", "New File")?;
@@ -312,9 +329,7 @@ fn build_menu(app: &tauri::AppHandle, ctx: &MenuContext) -> Result<Menu<tauri::W
         .item(&close_tab);
 
     #[cfg(not(target_os = "macos"))]
-    let file_menu = file_menu
-        .separator()
-        .item(&PredefinedMenuItem::quit(app, Some("Exit"))?);
+    let file_menu = file_menu.separator().item(&item(app, "app.quit", "Exit")?);
 
     let file_menu = file_menu.build()?;
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+	import { exit as exitApp } from '@tauri-apps/plugin-process';
 	import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import { open as openDialog, message } from '@tauri-apps/plugin-dialog';
 	import { open as openInBrowser } from '@tauri-apps/plugin-shell';
@@ -158,6 +159,7 @@
 			void openInBrowser('https://github.com/hendurhance/pandia/discussions').catch(() => {}),
 		reportIssue: () =>
 			void openInBrowser('https://github.com/hendurhance/pandia/issues/new/choose').catch(() => {}),
+		quit: () => void quitApp(),
 		isDev: SANDBOX_ENABLED,
 	};
 
@@ -211,28 +213,43 @@
 		};
 	});
 
+	// Every way out — the Quit item, closing the window, the Dock's Quit — ends here. With tab
+	// restore on, every tab (unsaved ones too) is kept for the next launch, so there's nothing to ask;
+	// otherwise, or if keeping fails, ask about unsaved changes. Cancelling that keeps the app open.
+	let quitting = false;
+	async function quitApp() {
+		if (quitting) return;
+		quitting = true;
+		let shouldQuit = true;
+		try {
+			if (!(await workspace.saveSession().catch(() => false))) {
+				await workspace.snapshot();
+				shouldQuit = await workspace.closeAll();
+			}
+		} finally {
+			quitting = false;
+			if (shouldQuit) await exitApp(0);
+		}
+	}
+
 	$effect(() => {
-		let unlisten: (() => void) | null = null;
+		let unlisteners: (() => void)[] = [];
 		let cancelled = false;
-		const win = getCurrentWebviewWindow();
-		void win
-			.onCloseRequested(async (event) => {
+		const keep = (u: () => void) => {
+			if (cancelled) u();
+			else unlisteners.push(u);
+		};
+		void getCurrentWebviewWindow()
+			.onCloseRequested((event) => {
 				event.preventDefault();
-				let shouldClose = true;
-				try {
-					await workspace.snapshot();
-					shouldClose = await workspace.closeAll();
-				} finally {
-					if (shouldClose) await win.destroy();
-				}
+				void quitApp();
 			})
-			.then((u) => {
-				if (cancelled) u();
-				else unlisten = u;
-			});
+			.then(keep);
+		void listen('quit-requested', () => void quitApp()).then(keep);
 		return () => {
 			cancelled = true;
-			unlisten?.();
+			for (const u of unlisteners) u();
+			unlisteners = [];
 		};
 	});
 

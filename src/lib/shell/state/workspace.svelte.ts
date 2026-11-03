@@ -7,7 +7,16 @@ import type { DocStatus } from '$lib/shell/logic/status';
 import { basename } from '$lib/util/path';
 import type { DocHandle, OpenSource } from '$lib/ipc/bindings';
 import type { Handoff } from './handoff';
-import { loadOpenTabs, saveOpenTabs } from './tabs-restore';
+import { loadOpenTabs, saveOpenTabs, type SessionTab } from './tabs-restore';
+
+async function fileExists(path: string): Promise<boolean> {
+	try {
+		await stat(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 export const MAX_TABS = 10;
 export const LARGE_FILE_WARN_BYTES = 200 * 1024 * 1024;
@@ -71,6 +80,11 @@ export class TabSlot {
 	resolveUnsaved(): Promise<boolean> {
 		return this.workspace.resolveUnsaved([this.tabId]);
 	}
+
+	/** Unsaved content a restored session left for this tab's file, taken once. */
+	takeRestoredEdits(): string | null {
+		return this.workspace.takeRestoredEdits(this.tabId);
+	}
 }
 
 export class Workspace {
@@ -83,6 +97,10 @@ export class Workspace {
 	private slots: Record<string, TabSlot> = {};
 	private idCounter = 1;
 	private restored = false;
+	/** Set once restore() has read the saved session, so snapshot() can't overwrite it first. */
+	private restoreDone = false;
+	/** Unsaved edits to reapply to a restored file once its tab has opened it. */
+	private restoredEdits: Record<string, string> = {};
 
 	constructor(private readonly prompts: WorkspacePrompts) {}
 
@@ -183,34 +201,105 @@ export class Workspace {
 	async restore(launch: Promise<void>): Promise<void> {
 		if (this.restored) return;
 		this.restored = true;
-		await behaviorPrefs.init();
-		if (!behaviorPrefs.restoreTabsOnLaunch) return;
-		const [{ paths, activeIndex }] = await Promise.all([loadOpenTabs(), launch]);
-		const launched =
-			Object.values(this.views).some((v) => v.context) ||
-			Object.values(this.pendingOpens).some(Boolean);
-		if (paths.length === 0 || launched) return;
-		const tabIds: (string | undefined)[] = [];
-		for (const [i, path] of paths.entries()) {
-			const outcome = await this.open({ kind: 'file', path }, { focus: i === 0 });
-			if (outcome.kind === 'full') break;
-			tabIds.push(outcome.kind === 'opened' ? outcome.tabId : undefined);
+		try {
+			await behaviorPrefs.init();
+			if (!behaviorPrefs.restoreTabsOnLaunch) return;
+			const [{ tabs, activeIndex }] = await Promise.all([loadOpenTabs(), launch]);
+			const launched =
+				Object.values(this.views).some((v) => v.context) ||
+				Object.values(this.pendingOpens).some(Boolean);
+			// Launched to open files: those lead, and the old session's saved files stay closed, but
+			// its unsaved work still comes back (it exists nowhere else).
+			const restoring = launched ? tabs.filter((t) => t.contentId) : tabs;
+			const tabIds: (string | undefined)[] = [];
+			for (const [i, tab] of restoring.entries()) {
+				const outcome = await this.restoreTab(tab, !launched && i === 0);
+				if (outcome?.kind === 'full') break;
+				tabIds.push(outcome?.kind === 'opened' ? outcome.tabId : undefined);
+			}
+			const active = launched ? undefined : tabIds[activeIndex];
+			if (active) this.activeId = active;
+		} finally {
+			this.restoreDone = true;
+			void ipc.docSessionClear().catch(() => {}); // content nothing took back is stale now
 		}
-		const active = tabIds[activeIndex];
-		if (active) this.activeId = active;
 	}
 
+	private async restoreTab(tab: SessionTab, focus: boolean): Promise<OpenOutcome | null> {
+		const content = tab.contentId
+			? await ipc.docSessionTake(tab.contentId).catch(() => null)
+			: null;
+		if (tab.path && (!tab.contentId || content !== null)) {
+			// An edited file reopens as that file with the edits on top, so Save still writes to it;
+			// if the file has gone meanwhile, its content comes back as an untitled document.
+			if (content === null || (await fileExists(tab.path))) {
+				const outcome = await this.open({ kind: 'file', path: tab.path }, { focus });
+				if (outcome.kind === 'opened' && content !== null) {
+					this.restoredEdits[outcome.tabId] = content;
+				}
+				return outcome;
+			}
+		}
+		if (content === null) return null;
+		return this.open({ kind: 'text', text: content, name: tab.name ?? null }, { focus });
+	}
+
+	takeRestoredEdits(tabId: string): string | null {
+		const text = this.restoredEdits[tabId] ?? null;
+		delete this.restoredEdits[tabId];
+		return text;
+	}
+
+	/** Remembers the open files for the next launch, as they change (unsaved ones on quit). */
 	async snapshot(): Promise<void> {
-		if (!behaviorPrefs.restoreTabsOnLaunch) return;
-		const paths: string[] = [];
+		if (!behaviorPrefs.restoreTabsOnLaunch || !this.restoreDone) return;
+		const tabs: SessionTab[] = [];
 		let activeIndex = -1;
 		for (const t of this.tabs) {
 			const ctx = this.views[t.id]?.context;
 			if (!ctx?.fileBacked || !ctx.sourceName) continue;
-			if (t.id === this.activeId) activeIndex = paths.length;
-			paths.push(ctx.sourceName);
+			if (t.id === this.activeId) activeIndex = tabs.length;
+			tabs.push({ path: ctx.sourceName });
 		}
-		await saveOpenTabs(paths, activeIndex);
+		await saveOpenTabs(tabs, activeIndex);
+	}
+
+	/**
+	 * Quitting with tab restore on: keeps every tab as it is, unsaved changes and untitled documents
+	 * included, for the next launch, so nothing needs saving now. False (nothing kept) when a pending
+	 * code-view edit isn't valid JSON; quitting then asks about unsaved changes as usual.
+	 */
+	async saveSession(): Promise<boolean> {
+		if (!behaviorPrefs.restoreTabsOnLaunch) return false;
+		for (const t of this.tabs) {
+			if (!(await (this.views[t.id]?.flush?.() ?? Promise.resolve(true)))) {
+				this.activate(t.id);
+				return false;
+			}
+		}
+		await ipc.docSessionClear().catch(() => {});
+		const tabs: SessionTab[] = [];
+		let activeIndex = -1;
+		for (const t of this.tabs) {
+			const view = this.views[t.id];
+			const ctx = view?.context;
+			if (!view || !ctx) continue; // an empty tab
+			const tab: SessionTab = {};
+			if (ctx.fileBacked && ctx.sourceName) tab.path = ctx.sourceName;
+			else if (ctx.sourceName && ctx.sourceName !== '(inline)') tab.name = ctx.sourceName;
+			if (!tab.path || view.status?.dirty) {
+				try {
+					tab.contentId = await ipc.docSessionStash(ctx.handle);
+				} catch {
+					return false; // couldn't keep it: let the usual prompt protect it
+				}
+			}
+			if (t.id === this.activeId) activeIndex = tabs.length;
+			tabs.push(tab);
+		}
+		await saveOpenTabs(tabs, activeIndex);
+		await Promise.all(this.tabs.map((t) => t.handoff?.settle(t.id)));
+		return true;
 	}
 
 	create = () => {

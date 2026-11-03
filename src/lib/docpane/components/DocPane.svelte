@@ -349,6 +349,9 @@
 				return;
 			}
 			handoff?.opened();
+			// A restored session reopens an edited file with its unsaved edits on top.
+			const edits = slot.takeRestoredEdits?.() ?? null;
+			if (edits !== null) await session.commitText(edits);
 			if (instructions?.compareWith) {
 				void compare.start({ kind: 'path', path: instructions.compareWith });
 			}

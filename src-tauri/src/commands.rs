@@ -854,6 +854,42 @@ pub async fn doc_backup_clear(app: tauri::AppHandle, doc_id: String) -> Result<(
     backup::clear(&app, &doc_id).map_err(WireError::from)
 }
 
+/// Keeps the document's current content for the next launch (quitting with tab restore on);
+/// returns the id `doc_session_take` reads it back with.
+#[tauri::command]
+#[specta::specta]
+pub async fn doc_session_stash(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Arc<DocStore>>,
+    handle: DocHandle,
+) -> Result<String, WireError> {
+    let store = state.inner().clone();
+    run_blocking(move || {
+        let content = store.read(handle, |doc| doc.serialize())?;
+        let id = handle.to_string();
+        backup::session_stash(&app, &id, &content)?;
+        // The crash backup of this document is now redundant, and would be offered again on launch.
+        let _ = backup::clear(&app, &id);
+        Ok(id)
+    })
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn doc_session_take(
+    app: tauri::AppHandle,
+    id: String,
+) -> Result<Option<String>, WireError> {
+    backup::session_take(&app, &id).map_err(WireError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn doc_session_clear(app: tauri::AppHandle) -> Result<(), WireError> {
+    backup::session_clear(&app).map_err(WireError::from)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn doc_backup_scan(app: tauri::AppHandle) -> Result<Vec<BackupRecord>, WireError> {

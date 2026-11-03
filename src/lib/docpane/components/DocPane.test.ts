@@ -21,6 +21,8 @@ vi.mock('$lib/ipc/client', () => ({
 		docCanonicalOffsets: vi.fn(async () => []),
 		docGetSlice: vi.fn(async () => []),
 		docUndo: vi.fn(),
+		docSetRootText: vi.fn(async () => ({ version: 2, affectedPaths: [[]] })),
+		docBackup: vi.fn(async () => true),
 		docSearch: vi.fn(async () => []),
 		docReplace: vi.fn(),
 		docGetValue: vi.fn(async () => '"/w/order.schema.json"'),
@@ -85,6 +87,38 @@ describe('DocPane', () => {
 		const schema = schemaSessions.for('paste-tab');
 		await vi.waitFor(() => expect(schema.text).toBe('{"type":"object"}'));
 		expect(schema.origin).toMatchObject({ from: 'document', ref: '/w/order.schema.json' });
+	});
+
+	it("puts a restored session's unsaved edits back on top of the reopened file", async () => {
+		const summary = {
+			rootKind: 'object' as const,
+			rootChildCount: 0,
+			sourcePath: '/w/edited.json',
+			sourceSize: 2,
+			lazy: false,
+			version: 1,
+			dirty: false,
+			fileBacked: true,
+			recoveryNote: null,
+			commentsStripped: false,
+		};
+		vi.mocked(ipc.docOpen).mockResolvedValue({
+			kind: 'opened',
+			handle: 'R' as never,
+			summary,
+			notes: { convertedFrom: null, repairs: [] },
+		});
+		vi.mocked(ipc.docSummary).mockResolvedValue({ ...summary, version: 2, dirty: true });
+		let edits: string | null = '{"edited":true}';
+		render(DocPane, {
+			props: {
+				tabId: 'restored-tab',
+				slot: { ...slot, takeRestoredEdits: () => [edits, (edits = null)][0] } as TabSlot,
+				isActive: false,
+				pendingOpen: { kind: 'file', path: '/w/edited.json' },
+			},
+		});
+		await vi.waitFor(() => expect(ipc.docSetRootText).toHaveBeenCalledWith('R', '{"edited":true}'));
 	});
 
 	it('recomputes a compare when the borrowed tab is edited', async () => {

@@ -18,6 +18,9 @@ vi.mock('$lib/ipc/client', () => ({
 		cliReply: vi.fn(async () => {}),
 		docBackupClear: vi.fn(async () => {}),
 		docValidateSchema: vi.fn(),
+		docSessionStash: vi.fn(async (h: string) => `stash-${h}`),
+		docSessionTake: vi.fn(async () => null),
+		docSessionClear: vi.fn(async () => {}),
 	},
 }));
 vi.mock('@tauri-apps/plugin-fs', () => ({ stat: vi.fn(async () => ({ size: 10 })) }));
@@ -33,7 +36,7 @@ vi.mock('$lib/settings/state/behavior-prefs.svelte', () => ({
 	},
 }));
 vi.mock('./tabs-restore', () => ({
-	loadOpenTabs: vi.fn(async () => ({ paths: [], activeIndex: 0 })),
+	loadOpenTabs: vi.fn(async () => ({ tabs: [], activeIndex: 0 })),
 	saveOpenTabs: vi.fn(async () => {}),
 }));
 
@@ -387,7 +390,7 @@ describe('Workspace: restoring tabs', () => {
 		const p = prompts();
 		const ws = new Workspace(p);
 		vi.mocked(loadOpenTabs).mockResolvedValue({
-			paths: ['/w/a.json', '/w/big.json', '/w/c.json'],
+			tabs: [{ path: '/w/a.json' }, { path: '/w/big.json' }, { path: '/w/c.json' }],
 			activeIndex: 2,
 		});
 		vi.mocked(stat).mockImplementation(
@@ -403,7 +406,7 @@ describe('Workspace: restoring tabs', () => {
 
 	it('waits for files handed in at launch, then skips restoring', async () => {
 		const ws = new Workspace(prompts());
-		vi.mocked(loadOpenTabs).mockResolvedValue({ paths: ['/w/old.json'], activeIndex: 0 });
+		vi.mocked(loadOpenTabs).mockResolvedValue({ tabs: [{ path: '/w/old.json' }], activeIndex: 0 });
 		let statDone!: () => void;
 		vi.mocked(stat).mockImplementationOnce(
 			() => new Promise((r) => (statDone = () => r({ size: 10 } as never))),
@@ -419,24 +422,128 @@ describe('Workspace: restoring tabs', () => {
 		]);
 	});
 
+	it('restores only unsaved work when a launch already queued files', async () => {
+		const ws = new Workspace(prompts());
+		const cli = await openTab(ws, '/w/from-cli.json');
+		vi.mocked(loadOpenTabs).mockResolvedValue({
+			tabs: [{ path: '/w/old.json' }, { name: 'draft.json', contentId: 'd' }],
+			activeIndex: 0,
+		});
+		vi.mocked(ipc.docSessionTake).mockResolvedValue('{"draft":1}');
+		await ws.restore(Promise.resolve());
+		expect(ws.tabs).toHaveLength(2);
+		expect(ws.activeId).toBe(cli);
+		expect(Object.values(ws.pendingOpens).filter(Boolean)).toContainEqual({
+			kind: 'text',
+			text: '{"draft":1}',
+			name: 'draft.json',
+		});
+		vi.mocked(ipc.docSessionTake).mockResolvedValue(null);
+	});
+
 	it('skips restoring when a launch already queued files', async () => {
 		const ws = new Workspace(prompts());
 		await openTab(ws, '/w/from-cli.json');
-		vi.mocked(loadOpenTabs).mockResolvedValue({ paths: ['/w/old.json'], activeIndex: 0 });
+		vi.mocked(loadOpenTabs).mockResolvedValue({ tabs: [{ path: '/w/old.json' }], activeIndex: 0 });
 		await ws.restore(Promise.resolve());
 		expect(ws.tabs).toHaveLength(1);
 	});
 
 	it('saves only file-backed tabs, with the active one marked', async () => {
 		const ws = new Workspace(prompts());
+		await ws.restore(Promise.resolve()); // nothing is saved before the last session was read
 		const a = await openTab(ws, '/w/a.json');
 		pane(ws, a);
 		const b = (await ws.open({ kind: 'text', text: '{}', name: 'pasted' })) as { tabId: string };
 		pane(ws, b.tabId, { fileBacked: false, path: 'pasted' });
 		await ws.snapshot();
-		expect(saveOpenTabs).toHaveBeenCalledWith(['/w/a.json'], -1);
+		expect(saveOpenTabs).toHaveBeenCalledWith([{ path: '/w/a.json' }], -1);
 		ws.activate(a);
 		await ws.snapshot();
-		expect(saveOpenTabs).toHaveBeenLastCalledWith(['/w/a.json'], 0);
+		expect(saveOpenTabs).toHaveBeenLastCalledWith([{ path: '/w/a.json' }], 0);
+	});
+
+	it('does not overwrite the saved session before it has been read', async () => {
+		vi.mocked(saveOpenTabs).mockClear();
+		const ws = new Workspace(prompts());
+		pane(ws, await openTab(ws, '/w/a.json'));
+		await ws.snapshot();
+		expect(saveOpenTabs).not.toHaveBeenCalled();
+	});
+});
+
+describe('Workspace: keeping the session on quit', () => {
+	it('keeps every tab as it is, unsaved ones included, without asking', async () => {
+		vi.mocked(saveOpenTabs).mockClear();
+		const p = prompts();
+		const ws = new Workspace(p);
+		const clean = await openTab(ws, '/w/clean.json');
+		pane(ws, clean);
+		const edited = (await ws.open({ kind: 'file', path: '/w/edited.json' })) as { tabId: string };
+		pane(ws, edited.tabId, { dirty: true });
+		const pasted = (await ws.open({ kind: 'text', text: '{}', name: null })) as { tabId: string };
+		pane(ws, pasted.tabId, { fileBacked: false, path: '(inline)' });
+		const named = (await ws.open({ kind: 'text', text: '[]', name: 'api.json' })) as {
+			tabId: string;
+		};
+		pane(ws, named.tabId, { fileBacked: false, path: 'api.json' });
+		ws.activate(edited.tabId);
+
+		expect(await ws.saveSession()).toBe(true);
+		expect(p.confirmUnsaved).not.toHaveBeenCalled();
+		expect(saveOpenTabs).toHaveBeenLastCalledWith(
+			[
+				{ path: '/w/clean.json' },
+				{ path: '/w/edited.json', contentId: `stash-h-${edited.tabId}` },
+				{ contentId: `stash-h-${pasted.tabId}` },
+				{ name: 'api.json', contentId: `stash-h-${named.tabId}` },
+			],
+			1,
+		);
+	});
+
+	it('keeps nothing when a pending edit cannot be applied, so quitting asks as usual', async () => {
+		vi.mocked(saveOpenTabs).mockClear();
+		const ws = new Workspace(prompts());
+		const id = await openTab(ws, '/w/a.json');
+		ws.slot(id).register({
+			label: 'a.json',
+			sourceName: '/w/a.json',
+			status: status(true),
+			context: null,
+			flush: async () => false,
+		});
+		expect(await ws.saveSession()).toBe(false);
+		expect(saveOpenTabs).not.toHaveBeenCalled();
+	});
+
+	it('restores edited files with their edits, and untitled documents from their content', async () => {
+		const ws = new Workspace(prompts());
+		vi.mocked(loadOpenTabs).mockResolvedValue({
+			tabs: [
+				{ path: '/w/edited.json', contentId: 'e' },
+				{ path: '/w/gone.json', name: undefined, contentId: 'g' },
+				{ name: 'api.json', contentId: 'n' },
+			],
+			activeIndex: 0,
+		});
+		vi.mocked(ipc.docSessionTake).mockImplementation(async (id) => `{"from":"${id}"}`);
+		vi.mocked(stat).mockImplementation(async (path) => {
+			if (String(path).includes('gone')) throw new Error('missing');
+			return { size: 10 } as never;
+		});
+
+		await ws.restore(Promise.resolve());
+		const [first, second, third] = ws.tabs;
+		expect(ws.pendingOpens[first!.id]).toEqual({ kind: 'file', path: '/w/edited.json' });
+		expect(ws.slot(first!.id).takeRestoredEdits()).toBe('{"from":"e"}');
+		expect(ws.slot(first!.id).takeRestoredEdits()).toBeNull(); // taken once
+		expect(ws.pendingOpens[second!.id]).toEqual({ kind: 'text', text: '{"from":"g"}', name: null });
+		expect(ws.pendingOpens[third!.id]).toEqual({
+			kind: 'text',
+			text: '{"from":"n"}',
+			name: 'api.json',
+		});
+		expect(ipc.docSessionClear).toHaveBeenCalled();
 	});
 });

@@ -111,8 +111,9 @@
 				<span class="switch-text">{behaviorPrefs.restoreTabsOnLaunch ? 'on' : 'off'}</span>
 			</button>
 			<div class="text-sm dim">
-				Reopen file-backed tabs from your previous session on startup. Untitled / unsaved tabs are
-				not restored — those are still handled by the crash-recovery prompt.
+				Reopen your previous session on startup, every tab as you left it: unsaved changes and
+				untitled tabs included. Quitting doesn't ask to save. When off, quitting asks about unsaved
+				changes and Pandia starts with an empty tab.
 			</div>
 		</div>
 	</section>
