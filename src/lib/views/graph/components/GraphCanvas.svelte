@@ -40,6 +40,7 @@
 		onReady?: (api: GraphCanvasApi | null) => void;
 
 		highlightCardId?: string | null;
+		searchQuery?: string;
 
 		edgeStyle?: 'elbow' | 'curve';
 	}
@@ -52,6 +53,7 @@
 		onScaleChange,
 		onReady,
 		highlightCardId = null,
+		searchQuery = '',
 		edgeStyle = 'elbow',
 	}: Props = $props();
 
@@ -82,6 +84,7 @@
 				theme,
 				dpr,
 				highlightCardId,
+				searchQuery,
 				edgeStyle,
 			});
 		});
@@ -91,6 +94,7 @@
 		void layout;
 		void viewport;
 		void highlightCardId;
+		void searchQuery;
 		void edgeStyle;
 		requestPaint();
 	});

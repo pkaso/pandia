@@ -18,6 +18,9 @@ export interface GraphTheme {
 	syntaxBoolean: string;
 	syntaxNull: string;
 	syntaxPunct: string;
+	/** Search match backgrounds, shared with the tree and code views. */
+	findMatch: string;
+	findCurrent: string;
 
 	monoFamily: string;
 
@@ -69,6 +72,8 @@ export function readGraphTheme(): GraphTheme {
 		syntaxBoolean: v(cs, '--syntax-boolean', '#9c6bff'),
 		syntaxNull: v(cs, '--syntax-null', '#6a6a72'),
 		syntaxPunct: v(cs, '--syntax-punct', '#6a6a72'),
+		findMatch: v(cs, '--find-match', 'rgba(224, 165, 60, 0.22)'),
+		findCurrent: v(cs, '--find-current', 'rgba(224, 165, 60, 0.45)'),
 		monoFamily,
 		isLight: luminance(bg) >= 0.6,
 	};

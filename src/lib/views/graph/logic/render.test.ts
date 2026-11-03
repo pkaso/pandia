@@ -14,10 +14,12 @@ const LONE_SURROGATE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[
 
 function recordingCtx() {
 	const strokes: unknown[] = [];
+	const fills: unknown[] = [];
 	const state: Record<string | symbol, unknown> = {};
 	const ctx = new Proxy(state, {
 		get(target, key) {
 			if (key === 'stroke') return () => strokes.push(target.strokeStyle);
+			if (key === 'fillRect') return () => fills.push(target.fillStyle);
 			if (key === 'measureText') return (s: string) => ({ width: s.length * CHAR_W });
 			if (key in target) return target[key];
 			return () => {};
@@ -27,7 +29,7 @@ function recordingCtx() {
 			return true;
 		},
 	});
-	return { ctx: ctx as unknown as CanvasRenderingContext2D, strokes };
+	return { ctx: ctx as unknown as CanvasRenderingContext2D, strokes, fills };
 }
 
 function stringRows(values: Record<string, string>) {
@@ -38,10 +40,10 @@ function stringRows(values: Record<string, string>) {
 }
 
 describe('paintFrame — search highlight', () => {
-	it.each([0.1, 0.3, 1])('rings the highlighted card at %f zoom', (scale) => {
+	function paint(scale: number, searchQuery: string, current: boolean) {
 		const theme = readGraphTheme();
-		const layout = stringRows({ a: 'x' });
-		const { ctx, strokes } = recordingCtx();
+		const layout = stringRows({ name: 'pandia', other: 'zzz' });
+		const { ctx, strokes, fills } = recordingCtx();
 		paintFrame({
 			ctx,
 			layout,
@@ -50,9 +52,30 @@ describe('paintFrame — search highlight', () => {
 			screenH: 600,
 			theme,
 			dpr: 1,
-			highlightCardId: layout.cards[0]!.id,
+			highlightCardId: current ? layout.cards[0]!.id : null,
+			searchQuery,
 		});
+		return { theme, strokes, fills };
+	}
+
+	it.each([0.1, 0.3])('rings the current card when zoomed too far out for text (%f)', (scale) => {
+		const { theme, strokes } = paint(scale, 'pan', true);
 		expect(strokes).toContain(theme.accent);
+	});
+
+	it('marks matching text with a background at reading zoom, the current card more strongly', () => {
+		const current = paint(1, 'pan', true);
+		expect(current.strokes).not.toContain(current.theme.accent); // background only, no ring
+		expect(current.fills).toContain(current.theme.findCurrent);
+
+		const other = paint(1, 'pan', false);
+		expect(other.fills).toContain(other.theme.findMatch);
+		expect(other.fills).not.toContain(other.theme.findCurrent);
+	});
+
+	it('marks nothing without a query', () => {
+		const { theme, fills } = paint(1, '', false);
+		expect(fills).not.toContain(theme.findMatch);
 	});
 });
 

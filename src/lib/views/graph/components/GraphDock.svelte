@@ -5,13 +5,11 @@
 		Crosshair,
 		Download,
 		Expand,
-		FoldVertical,
 		Maximize,
 		Minus,
 		Plus,
 		Settings,
 		Shrink,
-		UnfoldVertical,
 	} from '@lucide/svelte';
 	import type { ExportFormat } from './GraphExportMenu.svelte';
 
@@ -22,9 +20,6 @@
 
 		onFitView: () => void;
 
-		onExpandAll: () => void;
-
-		onCollapseAll: () => void;
 		onZoomOut: () => void;
 		onZoomIn: () => void;
 		onExportDefault: () => void;
@@ -42,7 +37,6 @@
 		exportBtn?: HTMLButtonElement | null;
 		exportMenuOpen?: boolean;
 		exportFormat: ExportFormat;
-		expandDisabled?: boolean;
 		exportDisabled?: boolean;
 	}
 
@@ -50,8 +44,6 @@
 		zoomPct,
 		onCenterFirst,
 		onFitView,
-		onExpandAll,
-		onCollapseAll,
 		onZoomOut,
 		onZoomIn,
 		onExportDefault,
@@ -64,7 +56,6 @@
 		exportBtn = $bindable(null),
 		exportMenuOpen = false,
 		exportFormat,
-		expandDisabled = false,
 		exportDisabled = false,
 	}: Props = $props();
 </script>
@@ -81,20 +72,6 @@
 
 	<button class="dock-btn" title="Fit to center" aria-label="Fit to center" onclick={onFitView}>
 		<Icon icon={Maximize} size="sm" />
-	</button>
-
-	<button
-		class="dock-btn"
-		title="Expand all"
-		aria-label="Expand all"
-		onclick={onExpandAll}
-		disabled={expandDisabled}
-	>
-		<Icon icon={UnfoldVertical} size="sm" />
-	</button>
-
-	<button class="dock-btn" title="Collapse all" aria-label="Collapse all" onclick={onCollapseAll}>
-		<Icon icon={FoldVertical} size="sm" />
 	</button>
 
 	<div class="dock-sep" aria-hidden="true"></div>

@@ -1,6 +1,7 @@
 import { HEADER_H, ROW_H, type LayoutResult, type PositionedCard } from './layout';
 import { hueColor, type GraphTheme } from './theme';
 import { mixHex } from '$lib/util/color';
+import { splitMatches } from '$lib/util/match-segments';
 import { rectsOverlap, type Rect, type ViewportState } from './viewport';
 import {
 	CARD_RADIUS,
@@ -28,7 +29,10 @@ export interface PaintOpts {
 	theme: GraphTheme;
 	dpr: number;
 
+	/** The current search match's card. */
 	highlightCardId?: string | null;
+	/** Search query whose matches in card text get a background, as in the tree and code views. */
+	searchQuery?: string;
 
 	edgeStyle?: EdgeStyle;
 }
@@ -58,9 +62,10 @@ export function paintFrame(opts: PaintOpts): void {
 	paintEdges(ctx, layout, visible, viewport.scale, theme, opts.edgeStyle ?? 'elbow');
 
 	const highlightId = opts.highlightCardId ?? null;
+	const query = opts.searchQuery?.trim() ?? '';
 	for (const card of layout.cards) {
 		if (!rectsOverlap(card, visible)) continue;
-		paintCard(ctx, card, viewport.scale, theme, card.id === highlightId, visible);
+		paintCard(ctx, card, viewport.scale, theme, card.id === highlightId, visible, query);
 	}
 }
 
@@ -151,8 +156,10 @@ function paintCard(
 	theme: GraphTheme,
 	highlighted: boolean,
 	visible: Rect,
+	query = '',
 ): void {
 	const accent = hueColor(theme, card.hue);
+	const markColor = highlighted ? theme.findCurrent : theme.findMatch;
 	const blockTint = theme.isLight ? 0.26 : 0.18;
 	const headerTint = theme.isLight ? 0.22 : 0.14;
 	const headerRuleTint = theme.isLight ? 0.45 : 0.32;
@@ -200,10 +207,11 @@ function paintCard(
 	}
 
 	ctx.font = `${HEADER_FONT_WEIGHT} ${FONT_PX}px ${theme.monoFamily}`;
-	ctx.fillStyle = theme.text;
 	ctx.textBaseline = 'middle';
 	ctx.textAlign = 'left';
 	const titleText = fitText(ctx, card.title, card.w - ROW_PAD_X * 2);
+	paintMarks(ctx, titleText, card.x + ROW_PAD_X, card.y, HEADER_H, query, markColor);
+	ctx.fillStyle = theme.text;
 	ctx.fillText(titleText, card.x + ROW_PAD_X, card.y + HEADER_H / 2);
 
 	ctx.font = `${FONT_PX}px ${theme.monoFamily}`;
@@ -222,10 +230,33 @@ function paintCard(
 			ctx.stroke();
 		}
 
-		paintRow(ctx, card, row, rowY, scale, theme);
+		paintRow(ctx, card, row, rowY, scale, theme, query, markColor);
 	}
+	// With text drawn, the current match is told apart by its mark colour alone, as in VS Code;
+	// the ring above is only for zoom levels too far out to draw text.
+}
 
-	if (highlighted) paintHighlightRing(ctx, card, scale, theme);
+/** Fills a background behind each match of `query` in `text`, drawn from `x` within a band of `h`. */
+function paintMarks(
+	ctx: CanvasRenderingContext2D,
+	text: string,
+	x: number,
+	top: number,
+	h: number,
+	query: string,
+	color: string,
+): void {
+	if (!query) return;
+	const segments = splitMatches(text, query);
+	if (!segments.some((s) => s.match)) return;
+	const inset = Math.max(2, (h - FONT_PX * 1.4) / 2);
+	ctx.fillStyle = color;
+	let at = x;
+	for (const seg of segments) {
+		const w = ctx.measureText(seg.text).width;
+		if (seg.match) ctx.fillRect(at, top + inset, w, h - inset * 2);
+		at += w;
+	}
 }
 
 function paintHighlightRing(
@@ -255,10 +286,13 @@ function paintRow(
 	rowY: number,
 	scale: number,
 	theme: GraphTheme,
+	query = '',
+	markColor = theme.findMatch,
 ): void {
 	const midY = rowY + ROW_H / 2;
 	let cursorX = card.x + ROW_PAD_X;
 
+	paintMarks(ctx, row.key, cursorX, rowY, ROW_H, query, markColor);
 	ctx.fillStyle = theme.textDim;
 	ctx.fillText(row.key, cursorX, midY);
 	cursorX += ctx.measureText(row.key).width;
@@ -281,6 +315,8 @@ function paintRow(
 	const portReserve = row.expandable ? 18 : 0;
 	const valMaxWidth = card.x + card.w - cursorX - ROW_PAD_X - portReserve;
 	const valText = fitText(ctx, row.value, Math.max(20, valMaxWidth));
+	paintMarks(ctx, valText, cursorX, rowY, ROW_H, query, markColor);
+	ctx.fillStyle = valColor;
 	ctx.fillText(valText, cursorX, midY);
 
 	if (row.expandable) {

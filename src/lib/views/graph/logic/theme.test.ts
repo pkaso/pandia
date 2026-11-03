@@ -19,6 +19,8 @@ const theme: GraphTheme = {
 	syntaxBoolean: '#9c6bff',
 	syntaxNull: '#6a6a72',
 	syntaxPunct: '#6a6a72',
+	findMatch: 'rgba(224, 165, 60, 0.22)',
+	findCurrent: 'rgba(224, 165, 60, 0.45)',
 	monoFamily: 'monospace',
 	isLight: false,
 };

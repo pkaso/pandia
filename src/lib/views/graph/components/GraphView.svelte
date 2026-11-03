@@ -38,6 +38,8 @@
 	import GraphDock from './GraphDock.svelte';
 	import GraphExportMenu, { type ExportFormat } from './GraphExportMenu.svelte';
 	import GraphSearchBar from './GraphSearchBar.svelte';
+	import ViewBar from '$lib/ui/ViewBar.svelte';
+	import ExpandCollapseButtons from '$lib/ui/ExpandCollapseButtons.svelte';
 	import GraphSettings from './GraphSettings.svelte';
 
 	interface Props {
@@ -346,85 +348,104 @@
 	}
 </script>
 
-<div class="graph-root">
-	{#if loading && !root}
-		<div class="state dim">building graph…</div>
-	{:else if root}
-		<GraphCanvas
-			{layout}
-			onPickCard={onPickPath}
-			onPortToggle={(row) => void toggleRow(row)}
-			onShowMore={(more) => void showMore(more)}
-			onScaleChange={(s) => (scale = s)}
-			onReady={(api) => (canvasApi = api)}
-			highlightCardId={searchHighlightId}
-			{edgeStyle}
-		/>
-		<GraphSearchBar
-			open={searchOpen}
-			query={searchQuery}
-			counter={searchCounter}
-			navDisabled={searchMatches.length === 0}
-			isError={searchOpen && !!searchQuery.trim() && searchMatches.length === 0}
-			onQueryChange={onSearchQueryChange}
-			onPrev={searchPrev}
-			onNext={searchNext}
-			onClose={closeSearch}
-		/>
-		<GraphDock
-			{zoomPct}
-			onCenterFirst={centerFirstItem}
-			onFitView={() => canvasApi?.fitView()}
-			onExpandAll={() => void expandAll()}
-			onCollapseAll={collapseAll}
-			onZoomOut={() => canvasApi?.zoomBy(0.8)}
-			onZoomIn={() => canvasApi?.zoomBy(1.25)}
-			onExportDefault={() => void exportAs(exportFormat)}
-			onToggleExportMenu={() => (exportMenuOpen = !exportMenuOpen)}
-			onToggleFullscreen={() => void toggleFullscreen()}
-			{isFullscreen}
-			onToggleSettings={() => (settingsOpen = !settingsOpen)}
-			{settingsOpen}
-			bind:settingsBtn
-			bind:exportBtn
-			{exportMenuOpen}
-			{exportFormat}
-			expandDisabled={expanding}
-			exportDisabled={exporting || layout.cards.length === 0}
-		/>
-		<GraphExportMenu
-			open={exportMenuOpen}
-			anchor={exportBtn}
-			rasterDownscaled={planRasterExport(layout, 40).downscaled}
-			onClose={() => (exportMenuOpen = false)}
-			onPick={(f) => {
-				exportFormat = f;
-				void exportAs(f);
-			}}
-		/>
-		<GraphSettings
-			open={settingsOpen}
-			{edgeStyle}
-			{animateExpand}
-			onEdgeStyle={(s) => (edgeStyle = s)}
-			onAnimateExpand={(v) => (animateExpand = v)}
-			onClose={() => (settingsOpen = false)}
-			anchor={settingsBtn}
-		/>
-		{#if error}
-			<div class="notice graph-error" role="alert">
-				<span>{error}</span>
-				<button onclick={() => (error = null)} aria-label="Dismiss error"
-					><Icon icon={X} size="sm" /></button
-				>
-			</div>
-		{/if}
-	{:else if error}
-		<div class="state err">{error}</div>
+<div class="graph-view">
+	{#if root}
+		<ViewBar label="graph">
+			{#snippet actions()}
+				<ExpandCollapseButtons
+					onExpandAll={() => void expandAll()}
+					onCollapseAll={collapseAll}
+					{expanding}
+					expandTitle={`Expand every level, up to ${EXPAND_ALL_MAX_CARDS} cards`}
+				/>
+			{/snippet}
+		</ViewBar>
 	{/if}
+	<div class="graph-root">
+		{#if loading && !root}
+			<div class="state dim">building graph…</div>
+		{:else if root}
+			<GraphCanvas
+				{layout}
+				onPickCard={onPickPath}
+				onPortToggle={(row) => void toggleRow(row)}
+				onShowMore={(more) => void showMore(more)}
+				onScaleChange={(s) => (scale = s)}
+				onReady={(api) => (canvasApi = api)}
+				highlightCardId={searchHighlightId}
+				searchQuery={searchOpen ? searchQuery : ''}
+				{edgeStyle}
+			/>
+			<GraphSearchBar
+				open={searchOpen}
+				query={searchQuery}
+				counter={searchCounter}
+				navDisabled={searchMatches.length === 0}
+				isError={searchOpen && !!searchQuery.trim() && searchMatches.length === 0}
+				onQueryChange={onSearchQueryChange}
+				onPrev={searchPrev}
+				onNext={searchNext}
+				onClose={closeSearch}
+			/>
+			<GraphDock
+				{zoomPct}
+				onCenterFirst={centerFirstItem}
+				onFitView={() => canvasApi?.fitView()}
+				onZoomOut={() => canvasApi?.zoomBy(0.8)}
+				onZoomIn={() => canvasApi?.zoomBy(1.25)}
+				onExportDefault={() => void exportAs(exportFormat)}
+				onToggleExportMenu={() => (exportMenuOpen = !exportMenuOpen)}
+				onToggleFullscreen={() => void toggleFullscreen()}
+				{isFullscreen}
+				onToggleSettings={() => (settingsOpen = !settingsOpen)}
+				{settingsOpen}
+				bind:settingsBtn
+				bind:exportBtn
+				{exportMenuOpen}
+				{exportFormat}
+				exportDisabled={exporting || layout.cards.length === 0}
+			/>
+			<GraphExportMenu
+				open={exportMenuOpen}
+				anchor={exportBtn}
+				rasterDownscaled={planRasterExport(layout, 40).downscaled}
+				onClose={() => (exportMenuOpen = false)}
+				onPick={(f) => {
+					exportFormat = f;
+					void exportAs(f);
+				}}
+			/>
+			<GraphSettings
+				open={settingsOpen}
+				{edgeStyle}
+				{animateExpand}
+				onEdgeStyle={(s) => (edgeStyle = s)}
+				onAnimateExpand={(v) => (animateExpand = v)}
+				onClose={() => (settingsOpen = false)}
+				anchor={settingsBtn}
+			/>
+			{#if error}
+				<div class="notice graph-error" role="alert">
+					<span>{error}</span>
+					<button onclick={() => (error = null)} aria-label="Dismiss error"
+						><Icon icon={X} size="sm" /></button
+					>
+				</div>
+			{/if}
+		{:else if error}
+			<div class="state err">{error}</div>
+		{/if}
+	</div>
 </div>
 
 <style>
+	.graph-view {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-height: 0;
+		min-width: 0;
+	}
 	.graph-root {
 		position: relative;
 		display: flex;

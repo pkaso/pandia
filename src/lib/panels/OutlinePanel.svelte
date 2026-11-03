@@ -9,6 +9,8 @@
 	import { WindowedScroller } from '$lib/views/shared/windowed-scroller.svelte';
 	import Icon from '$lib/ui/Icon.svelte';
 	import { ChevronDown, ChevronRight } from '@lucide/svelte';
+	import ViewBar from '$lib/ui/ViewBar.svelte';
+	import ExpandCollapseButtons from '$lib/ui/ExpandCollapseButtons.svelte';
 
 	interface Props {
 		context: DocContext | null;
@@ -138,6 +140,64 @@
 		roots = roots;
 	}
 
+	/** Expand all stops once this many items are loaded, so a huge document can't stall the panel. */
+	const EXPAND_ALL_MAX = 5000;
+	let expandingAll = $state(false);
+	let expandCapped = $state(false);
+
+	function countLoaded(nodes: ONode[]): number {
+		return nodes.reduce((n, c) => n + 1 + (c.children ? countLoaded(c.children) : 0), 0);
+	}
+
+	// Level by level, so the shallow structure opens first when the cap cuts it short.
+	async function expandAll() {
+		const ctx = context;
+		if (!ctx || expandingAll) return;
+		expandingAll = true;
+		expandCapped = false;
+		const stale = () => loadedHandle !== ctx.handle || loadedVersion !== ctx.version;
+		try {
+			let loaded = countLoaded(roots);
+			let level = roots.filter(expandable);
+			while (level.length > 0 && !stale()) {
+				const next: ONode[] = [];
+				for (const n of level) {
+					if (n.children === null) {
+						if (loaded >= EXPAND_ALL_MAX) {
+							expandCapped = true;
+							break;
+						}
+						n.children = await fetchRange(n.path, n.depth + 1, 0);
+						n.more = n.children.length === PER_LEVEL;
+						loaded += n.children.length;
+						if (stale()) return;
+					}
+					n.expanded = true;
+					next.push(...(n.children ?? []).filter(expandable));
+				}
+				roots = roots;
+				if (expandCapped) break;
+				level = next;
+			}
+		} catch (e) {
+			error = describeError(e);
+		} finally {
+			expandingAll = false;
+		}
+	}
+
+	function collapseAll() {
+		const close = (nodes: ONode[]) => {
+			for (const n of nodes) {
+				n.expanded = false;
+				if (n.children) close(n.children);
+			}
+		};
+		close(roots);
+		expandCapped = false;
+		roots = roots;
+	}
+
 	async function loadMore(parent: ONode | null, loaded: number) {
 		const path = parent ? parent.path : [];
 		const depth = parent ? parent.depth + 1 : 1;
@@ -216,6 +276,20 @@
 	{:else if roots.length === 0}
 		<div class="empty dim text-xs">Empty document</div>
 	{:else}
+		<div class="bar">
+			<ViewBar label="outline" actionsAlign="left">
+				{#snippet actions()}
+					<ExpandCollapseButtons
+						onExpandAll={() => void expandAll()}
+						onCollapseAll={collapseAll}
+						expanding={expandingAll}
+						expandTitle={expandCapped
+							? `Expanded the first ${EXPAND_ALL_MAX.toLocaleString()} items`
+							: 'Expand every level'}
+					/>
+				{/snippet}
+			</ViewBar>
+		</div>
 		<div class="section-label">
 			<span>document</span>
 			<span class="section-count">{roots.length}{rootsMore ? '+' : ''}</span>
@@ -326,6 +400,11 @@
 	}
 	.row.more:hover .more-label {
 		color: var(--text);
+	}
+
+	/* Spans the sidebar body's padding, so its rule runs edge to edge like the tree view's bar. */
+	.bar {
+		margin: calc(-1 * var(--space-md)) calc(-1 * var(--space-md)) var(--space-xs);
 	}
 
 	.hint {

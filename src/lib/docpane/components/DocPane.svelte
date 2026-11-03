@@ -514,7 +514,6 @@
 			{onCollapseAll}
 			{expandAllDisabled}
 			{expandAllTitle}
-			onSearch={find.openFind}
 			editing={edit.active}
 		/>
 		<div class="tree-pane">

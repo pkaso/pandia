@@ -8,6 +8,7 @@ import { Workspace, type PaneView, type TabSlot } from '$lib/shell/state/workspa
 import { PaneCommandBus } from '$lib/shell/state/pane-bus';
 import { reactiveBox } from '$lib/views/shared/test-runes.svelte';
 import type { NodeView } from '$lib/ipc/bindings';
+import { commandRegistry } from '$lib/palette/state/command-store.svelte';
 import DocPane from './DocPane.svelte';
 
 vi.mock('$lib/ipc/client', () => ({
@@ -254,7 +255,7 @@ describe('DocPane', () => {
 			props: {
 				tabId: 'tab-repl',
 				slot: { ...slot, register: (v: PaneView) => ((view = v), () => {}) } as TabSlot,
-				isActive: false,
+				isActive: true, // registers the pane's commands, so Find opens as ⌘F does
 				pendingOpen: { kind: 'file', path: '/w/list.json' },
 				paneBus,
 			},
@@ -269,7 +270,8 @@ describe('DocPane', () => {
 			applied: { version: 2, affectedPaths: [['items']] },
 		});
 		const pane = within(container);
-		await fireEvent.click(pane.getByTitle(/^Search/));
+		commandRegistry.run('find.open');
+		flushSync();
 		await fireEvent.input(pane.getByLabelText('search query'), { target: { value: '1' } });
 		await fireEvent.click(pane.getByLabelText('show replace'));
 		await fireEvent.click(pane.getByLabelText('Replace all'));

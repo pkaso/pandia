@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { Path, PathSegment } from '$lib/ipc/bindings';
 	import Icon from '$lib/ui/Icon.svelte';
-	import { ChevronRight, FoldVertical, Search, UnfoldVertical } from '@lucide/svelte';
-	import { shortcutLabel } from '$lib/shell/logic/shortcuts';
+	import { ChevronRight } from '@lucide/svelte';
+	import ViewBar from '$lib/ui/ViewBar.svelte';
+	import ExpandCollapseButtons from '$lib/ui/ExpandCollapseButtons.svelte';
 
 	interface Props {
 		path: Path | null;
@@ -11,7 +12,6 @@
 		onCollapseAll: () => void;
 		expandAllDisabled: boolean;
 		expandAllTitle: string;
-		onSearch?: () => void;
 		editing?: boolean;
 	}
 
@@ -22,7 +22,6 @@
 		onCollapseAll,
 		expandAllDisabled,
 		expandAllTitle,
-		onSearch,
 		editing = false,
 	}: Props = $props();
 
@@ -32,7 +31,7 @@
 	}
 </script>
 
-<div class="bar">
+<ViewBar label="tree">
 	{#if editing}<span class="editing-dot" title="Editing" aria-label="Editing"></span>{/if}
 	<span class="toggle" aria-hidden="true"><Icon icon={ChevronRight} size="xs" /></span>
 	<div class="path">
@@ -53,39 +52,17 @@
 			{/each}
 		{/if}
 	</div>
-	<div class="grow"></div>
-	<div class="actions">
-		<span class="tip" title={expandAllTitle}>
-			<button class="icon" onclick={onExpandAll} disabled={expandAllDisabled}
-				><Icon icon={UnfoldVertical} size="xs" /> Expand all</button
-			>
-		</span>
-		<button class="icon" onclick={onCollapseAll}
-			><Icon icon={FoldVertical} size="xs" /> Collapse all</button
-		>
-		<button
-			class="icon"
-			onclick={onSearch}
-			disabled={!onSearch}
-			title={onSearch ? `Search (${shortcutLabel('find.open')})` : 'Search unavailable'}
-			><Icon icon={Search} size="xs" /> Search</button
-		>
-	</div>
-</div>
+	{#snippet actions()}
+		<ExpandCollapseButtons
+			{onExpandAll}
+			{onCollapseAll}
+			expandDisabled={expandAllDisabled}
+			expandTitle={expandAllTitle}
+		/>
+	{/snippet}
+</ViewBar>
 
 <style>
-	.bar {
-		display: flex;
-		align-items: center;
-		gap: var(--space-sm);
-		height: 28px;
-		padding: 0 var(--space-lg);
-		background: var(--bg);
-		border-bottom: var(--rule-width) solid var(--rule);
-		font-size: var(--font-size-sm);
-		color: var(--text-dim);
-		flex-shrink: 0;
-	}
 	.toggle {
 		color: var(--text-faint);
 		flex-shrink: 0;
@@ -144,36 +121,5 @@
 	.sep {
 		color: var(--text-faint);
 		padding: 0 var(--space-2xs);
-	}
-
-	.actions {
-		display: flex;
-		gap: var(--space-md);
-		flex-shrink: 0;
-		align-items: center;
-		color: var(--text-faint);
-	}
-	.actions .tip {
-		display: inline-flex;
-	}
-	.actions .icon {
-		display: inline-flex;
-		align-items: center;
-		gap: var(--space-xs);
-		background: transparent;
-		border: none;
-		padding: 0;
-		font-size: var(--font-size-xs);
-		letter-spacing: 0.06em;
-		color: var(--text-dim);
-		cursor: pointer;
-		white-space: nowrap;
-	}
-	.actions .icon:hover {
-		color: var(--text);
-	}
-	.actions .icon:disabled {
-		color: var(--text-faint);
-		cursor: default;
 	}
 </style>

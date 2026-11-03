@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render } from '@testing-library/svelte';
+import { fireEvent, render, within } from '@testing-library/svelte';
 import { ipc } from '$lib/ipc/client';
 import type { DocContext } from '$lib/shell/state/workspace.svelte';
 import OutlinePanel from './OutlinePanel.svelte';
@@ -44,5 +44,27 @@ describe('OutlinePanel', () => {
 		await vi.waitFor(() => expect(vi.mocked(ipc.docGetSlice).mock.calls.length).toBeGreaterThan(2));
 		await new Promise((r) => setTimeout(r, 0));
 		await findByText('ada');
+	});
+
+	it('expands every level with Expand all and closes them with Collapse all', async () => {
+		// { users: { ada: { role: "x" } } }
+		vi.mocked(ipc.docGetSlice).mockImplementation(async (_h, path) => {
+			if (path.length === 0)
+				return [{ key: 'users', kind: 'object', preview: '{…}', childCount: 1 }];
+			if (path.length === 1) return [{ key: 'ada', kind: 'object', preview: '{…}', childCount: 1 }];
+			return [{ key: 'role', kind: 'string', preview: '"x"', childCount: null }];
+		});
+		const { container } = render(OutlinePanel, {
+			props: { context: { handle: 'h1', version: 1 } as unknown as DocContext },
+		});
+		const { findByText, getByText, queryByText } = within(container);
+		await findByText('users');
+
+		await fireEvent.click(getByText('Expand all'));
+		await findByText('role');
+
+		await fireEvent.click(getByText('Collapse all'));
+		await vi.waitFor(() => expect(queryByText('ada')).toBeNull());
+		expect(getByText('users')).toBeTruthy();
 	});
 });

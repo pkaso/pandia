@@ -14,7 +14,8 @@
 		type Row,
 		type VirtualGapRow,
 	} from '../logic/model';
-	import { chipText, openBracket, renderKey, detectUrl, splitMatches } from '../logic/row-format';
+	import { chipText, openBracket, renderKey, detectUrl } from '../logic/row-format';
+	import { splitMatches } from '$lib/util/match-segments';
 	import { mayBeImage } from '$lib/views/shared/image-source';
 	import { imagePreview } from '$lib/views/shared/image-preview.svelte';
 	import { editActionFor } from '../logic/row-menu-model';
