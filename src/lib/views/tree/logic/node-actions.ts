@@ -7,6 +7,7 @@ import { reorderDestination } from '$lib/util/reorder';
 import { pathToString } from '$lib/util/path';
 import type { PromptController } from '$lib/ui/prompt.svelte';
 import type { ApplyResult, DocHandle, Op, OpenSource, Path } from '$lib/ipc/bindings';
+import { compactJson, containerTextIn, escapeString, unescapeString } from './convert';
 
 const CHUNK = 200;
 const OBJECT_REORDER_MAX = 2000;
@@ -109,6 +110,26 @@ export function createNodeActions(deps: NodeActionDeps) {
 		const handle = deps.handle();
 		if (!handle) return;
 		deps.onOpenInNewTab({ kind: 'text', text: await read(handle), name: extractName(row) });
+	}
+
+	function validJson(text: string): boolean {
+		try {
+			JSON.parse(text);
+			return true;
+		} catch (e) {
+			deps.setError(`invalid JSON: ${(e as Error).message}`);
+			return false;
+		}
+	}
+
+	async function rewriteString(row: ContentRow, fn: (s: string) => string | null) {
+		const handle = deps.handle();
+		if (!handle || row.kind !== 'string') return;
+		const s: unknown = JSON.parse(await ipc.docGetValue(handle, row.path));
+		if (typeof s !== 'string') return;
+		const next = fn(s);
+		if (next === null || next === s) return;
+		await deps.apply({ kind: 'setValueText', path: row.path, text: JSON.stringify(next) });
 	}
 
 	async function remove(row: ContentRow) {
@@ -276,6 +297,68 @@ export function createNodeActions(deps: NodeActionDeps) {
 			if (row.kind !== 'object' || !deps.handle()) return;
 			await deps.apply({ kind: 'sortKeys', path: row.path, descending });
 		},
+
+		/**
+		 * Array/Object: a string holding one (typed or escaped) becomes it; anything else is replaced
+		 * by an empty one.
+		 */
+		convertToContainer: guard(async (row: ContentRow, want: 'array' | 'object') => {
+			const handle = deps.handle();
+			if (!handle) return;
+			let text: string | null = null;
+			if (row.kind === 'string') {
+				const s: unknown = JSON.parse(await ipc.docGetValue(handle, row.path));
+				if (typeof s === 'string') text = containerTextIn(s, want);
+			}
+			await deps.apply({
+				kind: 'setValueText',
+				path: row.path,
+				text: text ?? (want === 'array' ? '[]' : '{}'),
+			});
+		}),
+
+		/** String: an array or object becomes its JSON text, unescaped; other values become "". */
+		convertToString: guard(async (row: ContentRow) => {
+			const handle = deps.handle();
+			if (!handle) return;
+			let s = '';
+			if (row.kind === 'object' || row.kind === 'array') {
+				s = compactJson(await ipc.docGetValue(handle, row.path));
+			}
+			await deps.apply({ kind: 'setValueText', path: row.path, text: JSON.stringify(s) });
+		}),
+
+		escapeText: guard((row: ContentRow) => rewriteString(row, (s) => escapeString(s))),
+		unescapeText: guard((row: ContentRow) =>
+			rewriteString(row, (s) => {
+				const out = unescapeString(s);
+				if (out === null) deps.setError('this text has an escape sequence JSON doesn’t allow');
+				return out;
+			}),
+		),
+
+		/** Appends an item to an array, or a property to an object (asking for its key). */
+		addChild: guard(async (row: ContentRow) => {
+			if (row.kind === 'array') {
+				const index = row.childCount ?? 0;
+				const valueText = await deps.prompt.show(`value at index ${index} (JSON):`, 'null');
+				if (valueText === null || !validJson(valueText)) return;
+				await deps.apply({ kind: 'insertItemText', path: row.path, index, text: valueText });
+				return;
+			}
+			if (row.kind !== 'object') return;
+			const key = await deps.prompt.show('new key:');
+			if (key === null || key === '') return;
+			const valueText = await deps.prompt.show(`value for "${key}" (JSON):`, 'null');
+			if (valueText === null || !validJson(valueText)) return;
+			await deps.apply({
+				kind: 'insertKeyText',
+				path: row.path,
+				key,
+				text: valueText,
+				position: null,
+			});
+		}),
 
 		async copy(row: ContentRow) {
 			if (await copyValueJson(row)) {

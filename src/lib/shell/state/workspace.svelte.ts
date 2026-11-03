@@ -27,6 +27,8 @@ export interface PaneView {
 	readonly context: DocContext | null;
 	/** Renames the tab's document; resolves false when it couldn't (the pane shows why). */
 	rename?: (name: string) => Promise<boolean>;
+	/** Commits pending inline/code edits; false when the code buffer isn't valid JSON. */
+	flush?: () => Promise<boolean>;
 }
 
 export interface WorkspacePrompts {

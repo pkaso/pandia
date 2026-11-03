@@ -6,7 +6,7 @@ export const SIDEBAR_TABS = ['outline', 'schema', 'types', 'history'] as const;
 export type SidebarTabId = (typeof SIDEBAR_TABS)[number];
 export type SidebarSide = 'left' | 'right';
 
-export const DEFAULT_VIEWS = ['tree', 'code', 'grid', 'graph'] as const;
+export const DEFAULT_VIEWS = ['code', 'tree', 'grid', 'graph'] as const;
 export type DefaultView = (typeof DEFAULT_VIEWS)[number];
 
 // The tab words fit at 272 px at the default font size; larger fonts raise the floor in CSS.

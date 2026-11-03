@@ -30,7 +30,18 @@
 
 	const MENU_W = 248;
 	const SUBMENU_W = 168;
-	const MENU_H = 440;
+	const MENU_H = 440; // first-frame estimate; the popover then places itself by its real height
+	const EDGE_MARGIN_PX = 8;
+
+	// A submenu opens level with its item; near the bottom of the window it would run off-screen,
+	// so it moves up by however much it overhangs.
+	function placeSubmenu(e: Event) {
+		const sub = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('.submenu');
+		if (!sub) return;
+		sub.style.removeProperty('top');
+		const overhang = sub.getBoundingClientRect().bottom - (window.innerHeight - EDGE_MARGIN_PX);
+		if (overhang > 0) sub.style.top = `${-5 - overhang}px`;
+	}
 </script>
 
 <Popover {x} {y} width={MENU_W} height={MENU_H} flushAllowance={SUBMENU_W} {onClose}>
@@ -56,7 +67,14 @@
 							<span class="ico">{item.ico}</span><span class="lbl">{item.label}</span>
 						</button>
 					{:else}
-						<div class="menu-item has-sub" role="menuitem" aria-haspopup="menu" tabindex="0">
+						<div
+							class="menu-item has-sub"
+							role="menuitem"
+							aria-haspopup="menu"
+							tabindex="0"
+							onmouseenter={placeSubmenu}
+							onfocusin={placeSubmenu}
+						>
 							<span class="ico">{item.ico}</span><span class="lbl">{item.label}</span><span
 								class="chev"><Icon icon={ChevronRight} size="xs" /></span
 							>
@@ -97,8 +115,9 @@
 
 	.menu-item .ico {
 		color: var(--text-dim);
-		width: 12px;
-		font-size: var(--font-size-sm);
+		width: 18px;
+		font-size: calc(var(--font-size-base) * 1.15);
+		line-height: 1;
 		text-align: center;
 		flex-shrink: 0;
 	}

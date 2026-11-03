@@ -8,10 +8,12 @@ export interface DocMenuDeps {
 	edit: DocEditController;
 	nodeActions: ReturnType<typeof createNodeActions>;
 	apply: (op: Op) => Promise<ApplyResult | null>;
+	/** Opens the nested editor for an array or object. */
+	editNested: (row: ContentRow) => void;
 }
 
 export function createDocMenuActions(deps: DocMenuDeps) {
-	const { edit, nodeActions, apply } = deps;
+	const { edit, nodeActions, apply, editNested } = deps;
 	return async (action: MenuAction, rowIndex: number, row: ContentRow) => {
 		switch (action) {
 			case 'edit-key':
@@ -63,7 +65,25 @@ export function createDocMenuActions(deps: DocMenuDeps) {
 				await nodeActions.remove(row);
 				break;
 			case 'convert-string':
-				await apply({ kind: 'setValueText', path: row.path, text: '""' });
+				await nodeActions.convertToString(row);
+				break;
+			case 'convert-array':
+				await nodeActions.convertToContainer(row, 'array');
+				break;
+			case 'convert-object':
+				await nodeActions.convertToContainer(row, 'object');
+				break;
+			case 'escape':
+				await nodeActions.escapeText(row);
+				break;
+			case 'unescape':
+				await nodeActions.unescapeText(row);
+				break;
+			case 'add-child':
+				await nodeActions.addChild(row);
+				break;
+			case 'edit-nested':
+				editNested(row);
 				break;
 			case 'convert-number':
 				await apply({ kind: 'setValueText', path: row.path, text: '0' });

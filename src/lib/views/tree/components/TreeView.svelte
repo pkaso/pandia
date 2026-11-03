@@ -255,36 +255,14 @@
 		);
 	}
 
-	// A double-click on an editable key edits it; its two clicks mustn't also open and close the node.
-	// So a click there waits out the double-click window before toggling; anywhere else toggles at once.
-	const DOUBLE_CLICK_MS = 250;
-	let pendingToggle: ReturnType<typeof setTimeout> | null = null;
-	function cancelPendingToggle() {
-		if (pendingToggle !== null) clearTimeout(pendingToggle);
-		pendingToggle = null;
-	}
-	$effect(() => cancelPendingToggle);
-
+	// Only the arrow and the item-count chip open or close a node; clicking the key or value selects
+	// (a double-click edits). Enter/Space on the row still toggles, so it works from the keyboard.
 	function onRowClick(i: number, row: Row, e?: MouseEvent) {
 		// Clicks inside an open editor (placing the caret, picking true/false) belong to the editor.
 		if (e && (e.target as Element).closest('[data-inline-editor]')) return;
 		onSelect(i);
 		if (row.variant !== 'content' || !isExpandable(row)) return;
-		const onEditableKey =
-			editable && !!e && !!(e.target as Element).closest('.k') && !!editActionFor(row, 'key');
-		if (!onEditableKey) {
-			onToggle(i);
-			return;
-		}
-		cancelPendingToggle();
-		if (e.detail > 1) return; // the second click of a double-click
-		const key = pathKey(row.path);
-		pendingToggle = setTimeout(() => {
-			pendingToggle = null;
-			// Rows can shift meanwhile (a page loads); toggle the row that was clicked, wherever it is now.
-			const at = rows.findIndex((r) => r.variant === 'content' && pathKey(r.path) === key);
-			if (at >= 0) onToggle(at);
-		}, DOUBLE_CLICK_MS);
+		if (!e || (e.target as Element).closest('.caret, .chip')) onToggle(i);
 	}
 
 	function onRowContext(e: MouseEvent, i: number, row: Row) {
@@ -305,7 +283,6 @@
 	const editable = $derived(!readOnly && !!onRowAction);
 
 	function onRowDblClick(e: MouseEvent, i: number, row: Row) {
-		cancelPendingToggle();
 		if ((e.target as Element).closest('[data-inline-editor]')) return; // selecting a word
 		if (!editable || row.variant !== 'content') return;
 		const part = (e.target as Element).closest('.k, .v:not(.url)');
@@ -787,6 +764,7 @@
 		padding: 0 var(--space-sm);
 		font-size: var(--font-size-sm);
 		flex-shrink: 0;
+		cursor: pointer; /* opens and closes the node, like the arrow */
 	}
 
 	.trigger {

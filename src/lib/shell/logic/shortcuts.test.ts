@@ -63,7 +63,7 @@ describe('the shortcut table', () => {
 describe('matchShortcut — Ctrl shortcuts off macOS', () => {
 	it('finds the command for letter, digit and punctuation keys', () => {
 		expect(matchShortcut(key('KeyS', { shiftKey: true }))).toBe('doc.saveAs');
-		expect(matchShortcut(key('Digit2'))).toBe('view.code');
+		expect(matchShortcut(key('Digit2'))).toBe('view.tree');
 		expect(matchShortcut(key('BracketRight', { shiftKey: true }))).toBe('tab.next');
 		expect(matchShortcut(key('Comma'))).toBe('nav.settings');
 		expect(matchShortcut(key('Slash'))).toBe('help.shortcuts');
@@ -86,7 +86,7 @@ describe('matchShortcut — keyboard layouts', () => {
 	});
 
 	it('keeps digits, punctuation and non-Latin letters on their physical keys', () => {
-		expect(matchShortcut(key('Digit1', { key: '&' }))).toBe('view.tree');
+		expect(matchShortcut(key('Digit1', { key: '&' }))).toBe('view.code');
 		expect(matchShortcut(key('Comma', { key: ';' }))).toBe('nav.settings');
 		expect(matchShortcut(key('KeyZ', { key: 'я' }))).toBe('doc.undo');
 	});

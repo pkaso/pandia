@@ -191,28 +191,22 @@ describe('TreeView clicks on a container key', () => {
 	}
 
 	it('edits on a double-click without expanding or collapsing', async () => {
-		vi.useFakeTimers();
 		const { key, onToggle, onRowAction } = setup();
 		await fireEvent.click(key, { detail: 1 });
 		await fireEvent.click(key, { detail: 2 });
 		await fireEvent.dblClick(key);
-		vi.advanceTimersByTime(500);
 		expect(onToggle).not.toHaveBeenCalled();
 		expect(onRowAction).toHaveBeenCalledWith(expect.any(Number), 'edit-key');
-		vi.useRealTimers();
 	});
 
-	it('toggles after a single click on the key, and at once elsewhere on the row', async () => {
-		vi.useFakeTimers();
+	it('toggles only from the arrow or the item-count chip', async () => {
 		const { row, key, onToggle } = setup();
 		await fireEvent.click(key, { detail: 1 });
 		expect(onToggle).not.toHaveBeenCalled();
-		vi.advanceTimersByTime(300);
-		expect(onToggle).toHaveBeenCalledTimes(1);
-
 		await fireEvent.click(row.querySelector('.caret')!, { detail: 1 });
+		expect(onToggle).toHaveBeenCalledTimes(1);
+		await fireEvent.click(row.querySelector('.chip')!, { detail: 1 });
 		expect(onToggle).toHaveBeenCalledTimes(2);
-		vi.useRealTimers();
 	});
 
 	it('leaves the node alone when clicking inside an open editor', async () => {

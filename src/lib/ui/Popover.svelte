@@ -43,15 +43,27 @@
 	// Keep popovers at least this many pixels off the viewport edge so the
 	// shadow/rounded corner is fully visible.
 	const EDGE_MARGIN_PX = 8;
-	const flushRight = $derived(x + width + flushAllowance > vw);
+	// `width`/`height` are estimates for the first frame; once the popover is laid out its real size
+	// decides, so content that grows (a longer menu) still stays on screen.
+	let measuredW = $state(0);
+	let measuredH = $state(0);
+	const w = $derived(measuredW || width);
+	const h = $derived(measuredH || height);
+	const flushRight = $derived(x + w + flushAllowance > vw);
 	const style = $derived.by(() => {
-		const left = Math.min(x, Math.max(0, vw - width - EDGE_MARGIN_PX));
-		const top = Math.min(y, Math.max(0, vh - height - EDGE_MARGIN_PX));
+		const left = Math.min(x, Math.max(0, vw - w - EDGE_MARGIN_PX));
+		const top = Math.min(y, Math.max(0, vh - h - EDGE_MARGIN_PX));
 		return `left: ${left}px; top: ${top}px;`;
 	});
 </script>
 
-<div class="popover" {style} use:dismissable={{ onDismiss: onClose, ignore: anchorEl }}>
+<div
+	class="popover"
+	{style}
+	bind:offsetWidth={measuredW}
+	bind:offsetHeight={measuredH}
+	use:dismissable={{ onDismiss: onClose, ignore: anchorEl }}
+>
 	{@render children({ flushRight })}
 </div>
 

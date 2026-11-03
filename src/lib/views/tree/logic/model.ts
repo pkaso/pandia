@@ -272,4 +272,10 @@ export type MenuAction =
 	| 'convert-string'
 	| 'convert-number'
 	| 'convert-boolean'
-	| 'convert-null';
+	| 'convert-null'
+	| 'convert-array'
+	| 'convert-object'
+	| 'escape'
+	| 'unescape'
+	| 'add-child'
+	| 'edit-nested';

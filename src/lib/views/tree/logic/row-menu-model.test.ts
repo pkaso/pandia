@@ -40,6 +40,32 @@ describe('buildMenuModel', () => {
 		expect(a).not.toContain('convert-string'); // current kind is hidden
 	});
 
+	it('converts to Array and Object, but not to the current kind', () => {
+		const str = actions(buildMenuModel(row({ kind: 'string' }), caps));
+		expect(str).toContain('convert-array');
+		expect(str).toContain('convert-object');
+		const arr = actions(buildMenuModel(row({ kind: 'array', childCount: 0 }), caps));
+		expect(arr).not.toContain('convert-array');
+		expect(arr).toContain('convert-object');
+		expect(arr).toContain('convert-string');
+	});
+
+	it('offers Escape and Unescape on strings only', () => {
+		expect(actions(buildMenuModel(row({ kind: 'string' }), caps))).toEqual(
+			expect.arrayContaining(['escape', 'unescape']),
+		);
+		expect(actions(buildMenuModel(row({ kind: 'number' }), caps))).not.toContain('escape');
+	});
+
+	it('offers the nested editor and adding a child on arrays and objects, the root included', () => {
+		for (const kind of ['array', 'object'] as const) {
+			const a = actions(buildMenuModel(row({ kind, depth: 0, key: '$', childCount: 0 }), caps));
+			expect(a).toContain('edit-nested');
+			expect(a).toContain('add-child');
+		}
+		expect(actions(buildMenuModel(row({ kind: 'string' }), caps))).not.toContain('edit-nested');
+	});
+
 	it('an array element (numeric key) offers no edit-key', () => {
 		const a = actions(buildMenuModel(row({ kind: 'number', key: 0, depth: 1 }), caps));
 		expect(a).toContain('edit-value');

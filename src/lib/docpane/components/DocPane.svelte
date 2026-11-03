@@ -9,6 +9,8 @@
 	import TreeView from '$lib/views/tree/components/TreeView.svelte';
 	import Breadcrumb from '$lib/views/tree/components/Breadcrumb.svelte';
 	import CodeView, { type CodeCursor, type CodeViewApi } from '$lib/views/code/CodeView.svelte';
+	import NestedEditDialog from './NestedEditDialog.svelte';
+	import { nestedEditors } from '../state/nested-editors.svelte';
 	import GridView from '$lib/views/grid/components/GridView.svelte';
 	import GridEmpty from '$lib/views/grid/components/GridEmpty.svelte';
 	import GraphView, { type GraphViewApi } from '$lib/views/graph/components/GraphView.svelte';
@@ -56,6 +58,9 @@
 		confirmCommentLoss?: (name: string) => Promise<'save' | 'saveAs' | 'cancel'>;
 
 		confirmSchemaFetch?: (host: string) => Promise<boolean>;
+
+		/** 0 for a tab's own pane; 1+ for the editor inside a nested "Edit array/object" dialog. */
+		depth?: number;
 	}
 
 	let {
@@ -68,7 +73,11 @@
 		paneBus = null,
 		confirmCommentLoss,
 		confirmSchemaFetch = () => Promise.resolve(false),
+		depth = 0,
 	}: Props = $props();
+
+	// "Edit array/object…" opens this array or object in a nested editor.
+	let nestedTarget = $state<{ path: Path; kind: 'array' | 'object' } | null>(null);
 
 	function tabLabelFor(name: string | null): string {
 		if (!name) return 'untitled';
@@ -120,6 +129,12 @@
 			gridSchema = null;
 			gridLoadingFor = null;
 		},
+		editNested: (row) => {
+			if (row.kind === 'array' || row.kind === 'object') {
+				nestedTarget = { path: row.path, kind: row.kind };
+			}
+		},
+		ephemeral: untrack(() => depth) > 0,
 	});
 	const { session, tree, edit, find, compare, nav, nodeActions, menuAction, prompt } = doc;
 
@@ -267,12 +282,23 @@
 				return context;
 			},
 			rename: (name: string) => session.rename(name),
+			flush: () => doc.flushPending(),
 		}),
 	);
 
+	// Saving, closing and comparing make no sense for a nested editor's throwaway copy.
+	const NOT_NESTED = new Set([
+		'doc.save',
+		'doc.saveAs',
+		'doc.close',
+		'compare.with',
+		'compare.exit',
+	]);
+
 	$effect(() => {
-		if (!isActive) return;
-		const cmds = createDocPaneCommands(actions);
+		// Only the topmost pane owns commands: an open nested editor takes them from the one below.
+		if (!isActive || nestedEditors.top !== depth) return;
+		const cmds = createDocPaneCommands(actions).filter((c) => depth === 0 || !NOT_NESTED.has(c.id));
 		const dispose = cmds.map((c) => commandRegistry.register(c));
 		return () => {
 			for (const d of dispose) d();
@@ -409,15 +435,15 @@
 			<div class="view-modes">
 				<button
 					class="vm"
-					class:active={doc.viewMode === 'tree'}
-					onclick={() => void doc.switchView('tree')}
-					title={`tree view (${shortcutLabel('view.tree')})`}>Tree</button
-				>
-				<button
-					class="vm"
 					class:active={doc.viewMode === 'code'}
 					onclick={() => void doc.switchView('code')}
 					title={`code view (${shortcutLabel('view.code')})`}>Code</button
+				>
+				<button
+					class="vm"
+					class:active={doc.viewMode === 'tree'}
+					onclick={() => void doc.switchView('tree')}
+					title={`tree view (${shortcutLabel('view.tree')})`}>Tree</button
 				>
 				<button
 					class="vm"
@@ -645,6 +671,18 @@
 		<div class="empty-state">
 			<div class="empty-state-inner"><div class="dim text-sm">Loading grid…</div></div>
 		</div>
+	{/if}
+	{#if nestedTarget && session.handle}
+		{@const target = nestedTarget}
+		<NestedEditDialog
+			handle={session.handle}
+			path={target.path}
+			kind={target.kind}
+			{depth}
+			onApply={async (text) =>
+				(await session.applyOp({ kind: 'setValueText', path: target.path, text })) !== null}
+			onClose={() => (nestedTarget = null)}
+		/>
 	{/if}
 </section>
 

@@ -27,6 +27,8 @@ const CONVERT: Array<{ action: MenuAction; label: string; kind: NodeKind }> = [
 	{ action: 'convert-number', label: 'Number', kind: 'number' },
 	{ action: 'convert-boolean', label: 'Boolean', kind: 'bool' },
 	{ action: 'convert-null', label: 'Null', kind: 'null' },
+	{ action: 'convert-array', label: 'Array', kind: 'array' },
+	{ action: 'convert-object', label: 'Object', kind: 'object' },
 ];
 
 export function editActionFor(row: ContentRow, part: 'key' | 'value'): MenuAction | null {
@@ -47,6 +49,20 @@ export function buildMenuModel(row: ContentRow, caps: MenuCaps): MenuGroup[] {
 		edit.push({ type: 'action', action: 'edit-value', label: 'Edit value', ico: '✎' });
 	if (editActionFor(row, 'key'))
 		edit.push({ type: 'action', action: 'edit-key', label: 'Edit key', ico: '✎' });
+	if (row.kind === 'array' || row.kind === 'object') {
+		const noun = row.kind === 'array' ? 'array' : 'object';
+		edit.push({ type: 'action', action: 'edit-nested', label: `Edit ${noun}…`, ico: '✎' });
+		edit.push({
+			type: 'action',
+			action: 'add-child',
+			label: row.kind === 'array' ? 'Add item' : 'Add property',
+			ico: '+',
+		});
+	}
+	if (row.kind === 'string') {
+		edit.push({ type: 'action', action: 'escape', label: 'Escape', ico: '\\' });
+		edit.push({ type: 'action', action: 'unescape', label: 'Unescape', ico: '\\' });
+	}
 	if (edit.length) g.push(edit);
 
 	const clip: MenuItem[] = [

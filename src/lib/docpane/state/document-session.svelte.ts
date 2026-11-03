@@ -1,4 +1,5 @@
 import type { DocHandle, OpenSource } from '$lib/ipc/bindings';
+import type { ContentRow } from '$lib/views/tree/logic/model';
 import type { CodeViewApi } from '$lib/views/code/CodeView.svelte';
 import type { GraphViewApi } from '$lib/views/graph/components/GraphView.svelte';
 import { TreeRowsController } from '$lib/views/tree/state/tree-rows.svelte';
@@ -31,6 +32,10 @@ export interface DocumentSessionDeps {
 	graphApi: () => GraphViewApi | null;
 	/** Pane-owned view state cleared on document switch (grid schema etc.). */
 	clearViewState: () => void;
+	/** Opens the nested editor for an array or object row. */
+	editNested?: (row: ContentRow) => void;
+	/** A throwaway copy (the nested editor's): never backed up or auto-saved. */
+	ephemeral?: boolean;
 }
 
 const SAVE_FLASH_MS = 1500;
@@ -159,10 +164,13 @@ export class DocumentSession {
 			edit: this.edit,
 			nodeActions: this.nodeActions,
 			apply: (op) => this.session.applyOp(op),
+			editNested: (row) => this.deps.editNested?.(row),
 		});
 
-		this.wireBackups();
-		this.wireAutoSave();
+		if (!deps.ephemeral) {
+			this.wireBackups();
+			this.wireAutoSave();
+		}
 	}
 
 	flash = (msg: string) => {
@@ -174,6 +182,12 @@ export class DocumentSession {
 		const api = this.deps.code.api();
 		if (this.viewMode === 'code' && this.deps.code.dirty() && api) return api.flush();
 		return true;
+	};
+
+	/** Commits an open inline edit and the code view's buffer; false if the buffer isn't valid JSON. */
+	flushPending = async (): Promise<boolean> => {
+		if (this.edit.active) await this.edit.commit();
+		return this.flushCode();
 	};
 
 	switchView = async (mode: ViewMode): Promise<boolean> => {

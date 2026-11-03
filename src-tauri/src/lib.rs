@@ -370,8 +370,8 @@ fn build_menu(app: &tauri::AppHandle, ctx: &MenuContext) -> Result<Menu<tauri::W
     };
     let view_menu = view_menu
         .separator()
-        .item(&toggle_tree_view)
         .item(&toggle_code_view)
+        .item(&toggle_tree_view)
         .item(&toggle_form_view)
         .item(&toggle_graph_view)
         .separator()

@@ -97,3 +97,59 @@ describe('copy then paste', () => {
 		expect(ops).toEqual([{ kind: 'insertItemText', path: ['list'], index: 1, text: json }]);
 	});
 });
+
+describe('convert, escape and add', () => {
+	function on(kind: ContentRow['kind'], stored: string, childCount: number | null = null) {
+		vi.mocked(ipc.docGetValue).mockResolvedValue(asLosslessText(stored));
+		const ctx = setup([]);
+		return { ...ctx, r: { ...row(['v']), kind, childCount } as ContentRow };
+	}
+
+	it('turns a string holding an array, typed or escaped, into that array', async () => {
+		const typed = on('string', JSON.stringify('[1.20,3]'));
+		await typed.actions.convertToContainer(typed.r, 'array');
+		expect(typed.ops).toEqual([{ kind: 'setValueText', path: ['v'], text: '[1.20,3]' }]);
+
+		const escaped = on('string', JSON.stringify('{\\"a\\":123}'));
+		await escaped.actions.convertToContainer(escaped.r, 'object');
+		expect(escaped.ops).toEqual([{ kind: 'setValueText', path: ['v'], text: '{"a":123}' }]);
+	});
+
+	it('replaces anything else with an empty array or object', async () => {
+		const text = on('string', JSON.stringify('hello'));
+		await text.actions.convertToContainer(text.r, 'array');
+		const num = on('number', '42');
+		await num.actions.convertToContainer(num.r, 'object');
+		expect(text.ops[0]).toEqual({ kind: 'setValueText', path: ['v'], text: '[]' });
+		expect(num.ops[0]).toEqual({ kind: 'setValueText', path: ['v'], text: '{}' });
+	});
+
+	it('turns an array or object into its compact JSON text', async () => {
+		const { actions, ops, r } = on('object', '{\n  "a": [1.20, 3]\n}');
+		await actions.convertToString(r);
+		expect(ops).toEqual([
+			{ kind: 'setValueText', path: ['v'], text: JSON.stringify('{"a":[1.20,3]}') },
+		]);
+	});
+
+	it('escapes and unescapes a string', async () => {
+		const plain = on('string', JSON.stringify('say "hi"'));
+		await plain.actions.escapeText(plain.r);
+		expect(plain.ops).toEqual([
+			{ kind: 'setValueText', path: ['v'], text: JSON.stringify('say \\"hi\\"') },
+		]);
+
+		const escaped = on('string', JSON.stringify('line\\nnext'));
+		await escaped.actions.unescapeText(escaped.r);
+		expect(escaped.ops).toEqual([
+			{ kind: 'setValueText', path: ['v'], text: JSON.stringify('line\nnext') },
+		]);
+	});
+
+	it('reports an escape it cannot undo, changing nothing', async () => {
+		const { actions, ops, setError, r } = on('string', JSON.stringify('bad \\q'));
+		await actions.unescapeText(r);
+		expect(ops).toEqual([]);
+		expect(setError).toHaveBeenCalled();
+	});
+});
