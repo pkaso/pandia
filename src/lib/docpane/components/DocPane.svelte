@@ -8,7 +8,7 @@
 	import { chipText } from '$lib/views/tree/logic/row-format';
 	import TreeView from '$lib/views/tree/components/TreeView.svelte';
 	import Breadcrumb from '$lib/views/tree/components/Breadcrumb.svelte';
-	import CodeView, { type CodeViewApi } from '$lib/views/code/CodeView.svelte';
+	import CodeView, { type CodeCursor, type CodeViewApi } from '$lib/views/code/CodeView.svelte';
 	import GridView from '$lib/views/grid/components/GridView.svelte';
 	import GridEmpty from '$lib/views/grid/components/GridEmpty.svelte';
 	import GraphView, { type GraphViewApi } from '$lib/views/graph/components/GraphView.svelte';
@@ -79,6 +79,7 @@
 
 	let codeApi: CodeViewApi | null = $state(null);
 	let codeDirty = $state(false);
+	let codeCursor = $state<CodeCursor | null>(null);
 	let codeValid = $state<{ valid: boolean; message: string | null } | null>(null);
 
 	$effect(() => {
@@ -134,8 +135,12 @@
 		if (!paneBus) return;
 		return paneBus.subscribe(tabId, (cmd) => {
 			if (!session.handle) return;
-			if (cmd.kind === 'navigate') void nav.navigateTo(cmd.path);
-			else if (cmd.kind === 'history') void session.runHistory(cmd.delta);
+			if (cmd.kind === 'navigate') {
+				// From the outline or schema panel: the code view moves its caret there instead of
+				// handing the document over to the tree.
+				if (doc.viewMode === 'code' && codeApi) void codeApi.revealPath(cmd.path);
+				else void nav.navigateTo(cmd.path);
+			} else if (cmd.kind === 'history') void session.runHistory(cmd.delta);
 			else void compare.start(cmd.target);
 		});
 	});
@@ -243,6 +248,7 @@
 			}),
 			editing: edit.active,
 			dirty: doc.isDirty,
+			cursor: doc.viewMode === 'code' ? codeCursor : null,
 		};
 	});
 
@@ -582,6 +588,7 @@
 				onDirtyChange={(d) => (codeDirty = d)}
 				onReady={(a) => (codeApi = a)}
 				onParseState={(st) => (codeValid = st)}
+				onCursor={(c) => (codeCursor = c)}
 				onOpenTree={openTree}
 			/>
 			<FindBar

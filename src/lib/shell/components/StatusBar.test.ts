@@ -49,3 +49,32 @@ describe("status bar — what's new", () => {
 		expect(settings.get('lastSeenRelease')).toBe('1.0.8');
 	});
 });
+
+describe('status bar — code view caret', () => {
+	const base = {
+		pathDisplay: null,
+		kindDisplay: null,
+		sizeDisplay: '1 KB',
+		rootCountDisplay: null,
+		lazy: false,
+		validity: null,
+	};
+
+	it('shows line and column, and the selection length while text is selected', async () => {
+		const { getByLabelText, rerender } = render(StatusBar, {
+			props: { status: { ...base, cursor: { line: 12, col: 5, selected: 0 } } },
+		});
+		expect(getByLabelText('cursor position').textContent?.trim()).toBe('Ln 12, Col 5');
+		await rerender({ status: { ...base, cursor: { line: 2, col: 9, selected: 6 } } });
+		expect(getByLabelText('cursor position').textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			'Ln 2, Col 9 (6 selected)',
+		);
+	});
+
+	it('shows nothing outside the code view', () => {
+		const { queryByLabelText } = render(StatusBar, {
+			props: { status: { ...base, cursor: null } },
+		});
+		expect(queryByLabelText('cursor position')).toBeNull();
+	});
+});

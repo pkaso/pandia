@@ -336,7 +336,6 @@
 				{/each}
 			</div>
 		</div>
-		<div class="hint text-xs dim">click to expand · double-click to jump</div>
 	{/if}
 </div>
 
@@ -405,11 +404,5 @@
 	/* Spans the sidebar body's padding, so its rule runs edge to edge like the tree view's bar. */
 	.bar {
 		margin: calc(-1 * var(--space-md)) calc(-1 * var(--space-md)) var(--space-xs);
-	}
-
-	.hint {
-		flex-shrink: 0;
-		padding: var(--space-xs) var(--space-sm);
-		border-top: var(--rule-width) solid var(--rule);
 	}
 </style>

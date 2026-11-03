@@ -15,4 +15,7 @@ export interface DocStatus {
 	editing?: boolean;
 
 	dirty?: boolean;
+
+	/** Code view caret: 1-based line and column, and the number of selected characters. */
+	cursor?: { line: number; col: number; selected: number } | null;
 }

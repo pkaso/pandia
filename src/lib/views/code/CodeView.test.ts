@@ -15,6 +15,8 @@ vi.mock('$lib/ipc/client', () => ({
 	},
 }));
 
+import { ipc } from '$lib/ipc/client';
+
 describe('CodeView — committing the buffer', () => {
 	it('stays dirty when you type while a commit is still being applied', async () => {
 		let finishCommit!: (ok: boolean) => void;
@@ -44,5 +46,44 @@ describe('CodeView — committing the buffer', () => {
 		expect(await flushed).toBe(true);
 		expect(onCommit).toHaveBeenCalledWith('{"a": 1}');
 		expect(dirty.at(-1)).toBe(true);
+	});
+});
+
+describe('CodeView — caret', () => {
+	const TEXT = '{\n  "name": "pandia",\n  "tags": [\n    "x"\n  ]\n}';
+
+	async function mount() {
+		vi.mocked(ipc.docCanonicalText).mockResolvedValueOnce(TEXT as never);
+		const cursors: unknown[] = [];
+		let api: CodeViewApi | null = null;
+		const { container } = render(CodeView, {
+			props: {
+				handle: 'h2' as never,
+				sourceSize: 10,
+				editable: true,
+				onReady: (a: CodeViewApi | null) => (api = a),
+				onCursor: (c: unknown) => cursors.push(c),
+			},
+		});
+		await vi.waitFor(() => expect(api).not.toBeNull());
+		const view = EditorView.findFromDOM(container.querySelector('.cm-editor') as HTMLElement)!;
+		return { api: api!, view, cursors };
+	}
+
+	it('reports line, column and selection length, VS Code style', async () => {
+		const { view, cursors } = await mount();
+		expect(cursors.at(-1)).toEqual({ line: 1, col: 1, selected: 0 });
+		const at = TEXT.indexOf('"name"');
+		view.dispatch({ selection: { anchor: at, head: at + 6 } });
+		expect(cursors.at(-1)).toEqual({ line: 2, col: 9, selected: 6 });
+	});
+
+	it('reveals a path by putting the caret on its key', async () => {
+		const { api, view, cursors } = await mount();
+		const value = TEXT.indexOf('[');
+		vi.mocked(ipc.docCanonicalOffsets).mockResolvedValueOnce([{ start: value, end: value + 1 }]);
+		await api.revealPath(['tags']);
+		expect(view.state.selection.main.head).toBe(TEXT.indexOf('"tags"'));
+		expect(cursors.at(-1)).toEqual({ line: 3, col: 3, selected: 0 });
 	});
 });

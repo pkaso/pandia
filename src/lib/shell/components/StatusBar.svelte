@@ -62,6 +62,16 @@
 
 	<div class="sb-spacer"></div>
 
+	{#if status?.cursor}
+		{@const c = status.cursor}
+		<!-- VS Code style: "Ln 12, Col 5", plus "(3 selected)" while text is selected. -->
+		<div class="sb-cell right cursor" aria-label="cursor position">
+			<span class="val"
+				>Ln {c.line}, Col {c.col}{#if c.selected > 0}&nbsp;({c.selected} selected){/if}</span
+			>
+		</div>
+	{/if}
+
 	{#if whatsNew.unseen.length > 0}
 		<button
 			class="sb-cell right update-cell"
@@ -189,6 +199,10 @@
 		flex: 1;
 	}
 
+	.sb-cell.cursor .val {
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
 	.sb-cell.right {
 		border-right: 0;
 		border-left: var(--rule-width) solid var(--rule);

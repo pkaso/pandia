@@ -13,6 +13,16 @@
 		cmFindPrev: () => void;
 
 		cmReplaceAll: (query: string, replacement: string, caseSensitive: boolean) => number;
+
+		/** Puts the caret on the line of `path` (on its key) and scrolls it into the middle. */
+		revealPath: (path: Path) => Promise<void>;
+	}
+
+	/** The caret, VS Code style: 1-based line and column, and how many characters are selected. */
+	export interface CodeCursor {
+		line: number;
+		col: number;
+		selected: number;
 	}
 </script>
 
@@ -85,6 +95,8 @@
 		onParseState?: (state: { valid: boolean; message: string | null } | null) => void;
 
 		onOpenTree?: () => void;
+
+		onCursor?: (cursor: CodeCursor | null) => void;
 	}
 
 	let {
@@ -100,7 +112,34 @@
 		onReady,
 		onParseState,
 		onOpenTree,
+		onCursor,
 	}: Props = $props();
+
+	function cursorOf(state: EditorState): CodeCursor {
+		const head = state.selection.main.head;
+		const line = state.doc.lineAt(head);
+		const selected = state.selection.ranges.reduce((n, r) => n + (r.to - r.from), 0);
+		return { line: line.number, col: head - line.from + 1, selected };
+	}
+	const cursorListener = EditorView.updateListener.of((u) => {
+		if (u.selectionSet || u.docChanged) onCursor?.(cursorOf(u.state));
+	});
+
+	async function offsetOf(path: Path): Promise<[number, number] | null> {
+		const k = pathKey(path);
+		const known = offsetRanges.get(k);
+		if (known) return known;
+		const h = handle;
+		if (!h) return null;
+		try {
+			const [r] = await ipc.docCanonicalOffsets(h, [path]);
+			if (!r || handle !== h) return null;
+			offsetRanges.set(k, [r.start, r.end]);
+			return [r.start, r.end];
+		} catch {
+			return null;
+		}
+	}
 
 	const SIZE_CAP = 50 * 1024 * 1024;
 	const tooBig = $derived(sourceSize > SIZE_CAP);
@@ -198,6 +237,19 @@
 	}
 
 	const api: CodeViewApi = {
+		revealPath: async (path) => {
+			const range = await offsetOf(path);
+			const view = editorView;
+			if (!range || !view) return;
+			// The range starts at the value; a property's line starts with its key.
+			const line = view.state.doc.lineAt(Math.min(range[0], view.state.doc.length));
+			const at = line.from + (/^\s*/.exec(line.text)?.[0].length ?? 0);
+			view.dispatch({
+				selection: { anchor: at },
+				effects: EditorView.scrollIntoView(at, { y: 'center' }),
+			});
+			view.focus();
+		},
 		flush: () => commit(),
 		revert,
 		undo: () => (editorView ? undo(editorView) : false),
@@ -277,11 +329,13 @@
 								{ key: 'Mod-Shift-]', run: unfoldAll },
 							]),
 							...(editable ? editExtensions() : readOnlyExtensions()),
+							cursorListener,
 							noirTheme,
 						],
 					}),
 				});
 				editorView = view;
+				onCursor?.(cursorOf(view.state));
 				void ensureOffsets();
 				onScrollerReady?.(view.scrollDOM);
 				if (editable) {
@@ -312,6 +366,7 @@
 			}
 			view?.destroy();
 			editorView = undefined;
+			onCursor?.(null);
 			offsetRanges = new Map();
 			offsetsInFlight = new Set();
 		};
